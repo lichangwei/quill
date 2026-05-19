@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quill 设置</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>✦ Quill 设置</h1>
+      <p class="subtitle">AI Input Enhancer</p>
+    </header>
+
+    <form id="settings-form">
+      <section>
+        <h2>API 配置</h2>
+
+        <div class="field">
+          <label for="provider">API 提供商</label>
+          <select id="provider" name="provider">
+            <option value="openai">OpenAI（兼容格式）</option>
+            <option value="claude">Anthropic Claude</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="apiKey">API Key</label>
+          <input type="password" id="apiKey" name="apiKey" placeholder="sk-..." autocomplete="off" />
+        </div>
+
+        <div class="field" id="endpoint-field">
+          <label for="endpoint">自定义 Endpoint <span class="hint">（可选，留空使用默认）</span></label>
+          <input type="url" id="endpoint" name="endpoint" placeholder="https://api.openai.com/v1/chat/completions" />
+        </div>
+
+        <div class="field">
+          <label for="model">模型名称</label>
+          <input type="text" id="model" name="model" placeholder="gpt-4o" />
+        </div>
+      </section>
+
+      <section>
+        <h2>翻译设置</h2>
+        <div class="field">
+          <label for="targetLang">翻译目标语言</label>
+          <select id="targetLang" name="targetLang">
+            <option value="中文">中文</option>
+            <option value="英文">英文</option>
+            <option value="日文">日文</option>
+            <option value="韩文">韩文</option>
+            <option value="法文">法文</option>
+            <option value="德文">德文</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary">保存设置</button>
+        <span id="save-status" class="save-status"></span>
+      </div>
+    </form>
+  </div>
+  <script type="module" src="options.ts"></script>
+</body>
+</html>
