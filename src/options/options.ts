@@ -6,7 +6,6 @@ const providerEl = document.getElementById('provider') as HTMLSelectElement;
 const apiKeyEl = document.getElementById('apiKey') as HTMLInputElement;
 const endpointEl = document.getElementById('endpoint') as HTMLInputElement;
 const modelEl = document.getElementById('model') as HTMLInputElement;
-const targetLangEl = document.getElementById('targetLang') as HTMLSelectElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
 const endpointField = document.getElementById('endpoint-field') as HTMLDivElement;
 
@@ -17,14 +16,13 @@ const MODEL_DEFAULTS: Record<string, string> = {
 
 // 加载已保存的设置
 chrome.storage.sync.get(
-  { provider: 'openai', apiKey: '', model: 'gpt-4o', endpoint: '', targetLang: '中文' },
+  { provider: 'openai', apiKey: '', model: 'gpt-4o', endpoint: '' },
   (items) => {
     const s = items as unknown as Settings;
     providerEl.value = s.provider;
     apiKeyEl.value = s.apiKey;
     endpointEl.value = s.endpoint;
     modelEl.value = s.model;
-    targetLangEl.value = s.targetLang;
     updateEndpointVisibility(s.provider);
   }
 );
@@ -50,7 +48,6 @@ form.addEventListener('submit', (e) => {
     apiKey: apiKeyEl.value.trim(),
     model: modelEl.value.trim(),
     endpoint: endpointEl.value.trim(),
-    targetLang: targetLangEl.value,
   };
 
   chrome.storage.sync.set(settings, () => {

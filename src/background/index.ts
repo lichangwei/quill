@@ -1,24 +1,15 @@
 import type { EnhanceRequest, EnhanceResponse, Settings } from '../types';
+import { buildPrompt } from './prompt';
 
-const TEMPLATES: Record<string, string> = {
-  polish: '请润色以下文字，使其更专业流畅，保持原意，只返回结果，不要任何解释：\n\n',
-  translate: '请将以下文字翻译成{targetLang}，只返回翻译结果，不要任何解释：\n\n',
-  shorten: '请将以下文字精简缩写，保留核心信息，只返回结果，不要任何解释：\n\n',
-  expand: '请将以下文字扩写，使内容更丰富详细，只返回结果，不要任何解释：\n\n',
-};
+const LEGACY_POLISH_PROMPT = '请润色以下文字，使其更专业流畅，保持原意，只返回结果，不要任何解释：\n\n{content}';
 
 async function getSettings(): Promise<Settings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get(
-      { provider: 'openai', apiKey: '', model: 'gpt-4o', endpoint: '', targetLang: '中文' },
+      { provider: 'openai', apiKey: '', model: 'gpt-4o', endpoint: '' },
       (items) => resolve(items as unknown as Settings)
     );
   });
-}
-
-function buildPrompt(template: string, context: EnhanceRequest['context'], targetLang: string): string {
-  const instruction = TEMPLATES[template].replace('{targetLang}', targetLang);
-  return `页面：${context.pageTitle}\n字段：${context.fieldLabel}\n\n${instruction}${context.content}`;
 }
 
 async function callOpenAI(prompt: string, settings: Settings): Promise<string> {
@@ -79,7 +70,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ error: '请先在设置页配置 API Key' } as EnhanceResponse);
           return;
         }
-        const prompt = buildPrompt(req.template, req.context, settings.targetLang);
+        const legacyTemplate = (req as EnhanceRequest & { template?: string }).template;
+        const actionPrompt = typeof req.prompt === 'string'
+          ? req.prompt
+          : legacyTemplate === 'polish'
+            ? LEGACY_POLISH_PROMPT
+            : null;
+        if (!actionPrompt || !req.context) {
+          sendResponse({ error: '扩展已更新，请刷新当前页面后重试' } as EnhanceResponse);
+          return;
+        }
+        const prompt = buildPrompt(actionPrompt, req.context);
         let result: string;
         if (settings.provider === 'claude') {
           result = await callClaude(prompt, settings);

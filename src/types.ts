@@ -3,7 +3,23 @@ export interface Settings {
   apiKey: string;
   model: string;
   endpoint: string;
-  targetLang: string;
+}
+
+export interface ElementTarget {
+  kind: 'id' | 'selector';
+  value: string;
+}
+
+export interface StoredAction {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
+export interface StoredActionGroup {
+  url: string;
+  selector: string;
+  actions: StoredAction[];
 }
 
 export interface FieldContext {
@@ -13,7 +29,7 @@ export interface FieldContext {
 }
 
 export interface EnhanceRequest {
-  template: 'polish' | 'translate' | 'shorten' | 'expand';
+  prompt: string;
   context: FieldContext;
 }
 
