@@ -1,5 +1,5 @@
-import type { EnhanceRequest, EnhanceResponse, Settings } from '../types';
-import { buildPrompt } from './prompt';
+import type { EnhanceRequest, EnhanceResponse, PageFieldRequest, Settings } from '../types';
+import { PAGE_FIELD_NOT_FOUND, buildPageFieldPrompt, buildPrompt } from './prompt';
 
 const LEGACY_POLISH_PROMPT = '请润色以下文字，使其更专业流畅，保持原意，只返回结果，不要任何解释：\n\n{content}';
 
@@ -56,6 +56,12 @@ async function callClaude(prompt: string, settings: Settings): Promise<string> {
   return data.content[0].text.trim();
 }
 
+async function callModel(prompt: string, settings: Settings): Promise<string> {
+  return settings.provider === 'claude'
+    ? callClaude(prompt, settings)
+    : callOpenAI(prompt, settings);
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
@@ -81,12 +87,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           return;
         }
         const prompt = buildPrompt(actionPrompt, req.context);
-        let result: string;
-        if (settings.provider === 'claude') {
-          result = await callClaude(prompt, settings);
-        } else {
-          result = await callOpenAI(prompt, settings);
-        }
+        console.info(`[Quill] 最终生成提示词\n${prompt}`);
+        const result = await callModel(prompt, settings);
         sendResponse({ result } as EnhanceResponse);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
@@ -94,5 +96,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
     })();
     return true; // 保持异步通道
+  }
+  if (msg.type === 'EXTRACT_PAGE_FIELD') {
+    const req = msg.payload as PageFieldRequest;
+    (async () => {
+      try {
+        const settings = await getSettings();
+        if (!settings.apiKey) {
+          sendResponse({ error: '请先在设置页配置 API Key' } as EnhanceResponse);
+          return;
+        }
+        if (!req?.description || !req.pageContent) {
+          sendResponse({ error: '页面字段读取参数不完整' } as EnhanceResponse);
+          return;
+        }
+        const extractionPrompt = buildPageFieldPrompt(req);
+        console.info(`[Quill] 页面字段提取提示词\n${extractionPrompt}`);
+        const result = await callModel(extractionPrompt, settings);
+        if (!result || result.includes(PAGE_FIELD_NOT_FOUND)) {
+          sendResponse({ error: `未找到页面字段“${req.description}”` } as EnhanceResponse);
+          return;
+        }
+        sendResponse({ result } as EnhanceResponse);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        sendResponse({ error: message } as EnhanceResponse);
+      }
+    })();
+    return true;
   }
 });

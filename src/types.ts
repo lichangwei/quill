@@ -37,3 +37,12 @@ export interface EnhanceResponse {
   result?: string;
   error?: string;
 }
+
+export interface PageFieldRequest {
+  description: string;
+  pageTitle: string;
+  pageUrl: string;
+  pageContent: string;
+}
+
+export type PageFieldResponse = EnhanceResponse;

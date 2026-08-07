@@ -15,6 +15,8 @@ import {
   savePolishAction,
   targetToSelector,
 } from '../actions/storage';
+import { getPageReferences, resolvePageReferences } from '../page-context/placeholders';
+import { readPageContent } from '../page-context/reader';
 
 const PANEL_ID = 'quill-panel';
 
@@ -54,7 +56,7 @@ const PANEL_HTML = `
     <form class="quill-action-form" hidden>
       <input type="hidden" name="id" />
       <label>名称<input name="name" type="text" maxlength="40" required /></label>
-      <label>Prompt<textarea name="prompt" rows="5" required placeholder="可用 {content} 表示输入框内容"></textarea></label>
+      <label>Prompt<textarea name="prompt" rows="5" required placeholder="{content} 表示当前输入框，{page:文章内容} 可读取页面字段"></textarea></label>
       <div class="quill-form-warning" hidden></div>
       <div class="quill-form-actions">
         <button type="submit" class="quill-primary quill-save-action">保存</button>
@@ -375,26 +377,35 @@ export class QuillPanel {
       fieldLabel: getFieldLabel(this.targetEl),
       content: getFieldContent(this.targetEl),
     };
-    if (!context.content.trim()) {
+    const pageReferences = getPageReferences(action.prompt);
+    if (!context.content.trim() && pageReferences.length === 0) {
       this.showError('输入框内容为空');
       return;
     }
     this.showLoading();
-    const request: EnhanceRequest = { prompt: action.prompt, context };
-    chrome.runtime.sendMessage({ type: 'ENHANCE_TEXT', payload: request }, (response?: EnhanceResponse) => {
-      if (chrome.runtime.lastError) {
-        this.showError(chrome.runtime.lastError.message || '通信错误');
-      } else if (!response) {
-        this.showError('未收到后台响应');
-      } else if (response.error) {
-        this.showError(response.error);
-      } else if (response.result) {
-        this.lastResult = response.result;
-        this.showResult(response.result);
-      } else {
-        this.showError('未生成结果');
-      }
-    });
+    try {
+      const prompt = await resolvePageReferences(action.prompt, readPageContent);
+      const requestContext = pageReferences.length > 0 && !action.prompt.includes('{content}')
+        ? { ...context, content: '' }
+        : context;
+      const request: EnhanceRequest = { prompt, context: requestContext };
+      chrome.runtime.sendMessage({ type: 'ENHANCE_TEXT', payload: request }, (response?: EnhanceResponse) => {
+        if (chrome.runtime.lastError) {
+          this.showError(chrome.runtime.lastError.message || '通信错误');
+        } else if (!response) {
+          this.showError('未收到后台响应');
+        } else if (response.error) {
+          this.showError(response.error);
+        } else if (response.result) {
+          this.lastResult = response.result;
+          this.showResult(response.result);
+        } else {
+          this.showError('未生成结果');
+        }
+      });
+    } catch (error) {
+      this.showError(this.errorMessage(error));
+    }
   }
 
   private showLoading(): void {
