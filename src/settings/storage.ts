@@ -2,6 +2,8 @@ import * as Types from '../types';
 
 export const MODEL_STORAGE_KEY = 'quill:model-config';
 export const MODEL_NAME_MAX_LENGTH = 30;
+export const SYSTEM_PROMPT_STORAGE_KEY = 'quill:system-prompt';
+export const SYSTEM_PROMPT_MAX_LENGTH = 200;
 
 const DEFAULT_MODEL_STATE: Types.ModelConfigState = {
   models: [],
@@ -167,4 +169,24 @@ export async function setActiveModel(id: string): Promise<void> {
     state.activeModelId = id;
     await saveModelState(state);
   }
+}
+
+export function validateSystemPrompt(value: string): string | null {
+  if (value.length > SYSTEM_PROMPT_MAX_LENGTH) {
+    return `系统提示词不能超过 ${SYSTEM_PROMPT_MAX_LENGTH} 个字符`;
+  }
+  return null;
+}
+
+export async function getSystemPrompt(): Promise<string> {
+  const stored = await storageGet(chrome.storage.local, SYSTEM_PROMPT_STORAGE_KEY);
+  if (typeof stored !== 'string') return '';
+  return stored.slice(0, SYSTEM_PROMPT_MAX_LENGTH);
+}
+
+export async function setSystemPrompt(value: string): Promise<void> {
+  const trimmed = value.trim();
+  const error = validateSystemPrompt(trimmed);
+  if (error) throw new Error(error);
+  await storageSet(SYSTEM_PROMPT_STORAGE_KEY, trimmed);
 }

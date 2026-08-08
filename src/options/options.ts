@@ -2,11 +2,14 @@ import { testConnection } from '../ai/service';
 import {
   MODEL_NAME_MAX_LENGTH,
   MODEL_STORAGE_KEY,
+  SYSTEM_PROMPT_MAX_LENGTH,
   addModel,
   getModelState,
+  getSystemPrompt,
   removeModel,
   setDefaultModel,
   setModelEnabled,
+  setSystemPrompt,
   updateModel,
   validateModelConfig,
 } from '../settings/storage';
@@ -30,7 +33,7 @@ const confirmAction = document.getElementById('confirm-action') as HTMLButtonEle
 let modelState: Types.ModelConfigState = { models: [], defaultModelId: null, activeModelId: null };
 let editingModelId: string | null = null;
 let confirmHandler: (() => Promise<void>) | null = null;
-let activeSection: 'model' | 'prompt' = 'model';
+let activeSection: 'model' | 'prompt' | 'system-prompt' = 'model';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -193,8 +196,60 @@ function renderPagePrompts(): void {
   content.replaceChildren(section);
 }
 
+function renderSystemPrompt(): void {
+  const section = element('section', 'settings-section');
+  section.append(sectionHeading(
+    '系统提示词',
+    `维护系统级别的提示词，每次调用大模型时都会作为最高优先级的要求附加到提示词中，最多 ${SYSTEM_PROMPT_MAX_LENGTH} 个字符。`,
+    element('span'),
+  ));
+
+  const form = element('form', 'form-stack');
+  const label = element('label');
+  label.append(document.createTextNode('系统提示词'));
+  const textarea = element('textarea') as HTMLTextAreaElement;
+  textarea.id = 'system-prompt-input';
+  textarea.rows = 6;
+  textarea.maxLength = SYSTEM_PROMPT_MAX_LENGTH;
+  textarea.placeholder = '例如：始终使用简体中文回复，语气专业简洁。';
+  const count = element('span', 'char-count');
+  count.id = 'system-prompt-count';
+  label.append(textarea, count);
+  form.append(label);
+
+  const status = element('p', 'form-status') as HTMLParagraphElement;
+  status.hidden = true;
+  form.append(status);
+
+  const actions = element('div', 'form-actions');
+  const saveButton = button('保存', 'button primary', () => {
+    /* handled by form submit */
+  });
+  saveButton.type = 'submit';
+  actions.append(saveButton);
+  form.append(actions);
+
+  section.append(form);
+  content.replaceChildren(section);
+
+  void getSystemPrompt().then((value) => {
+    textarea.value = value;
+    updateCount(textarea, 'system-prompt-count', SYSTEM_PROMPT_MAX_LENGTH);
+  });
+
+  textarea.addEventListener('input', () => updateCount(textarea, 'system-prompt-count', SYSTEM_PROMPT_MAX_LENGTH));
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void setSystemPrompt(textarea.value)
+      .then(() => showFormStatus(status, '已保存', true))
+      .catch((error: unknown) => showFormStatus(status, error instanceof Error ? error.message : String(error)));
+  });
+}
+
 function renderActiveSection(): void {
   if (activeSection === 'prompt') renderPagePrompts();
+  else if (activeSection === 'system-prompt') renderSystemPrompt();
   else renderModels();
 }
 
@@ -205,7 +260,8 @@ async function reload(): Promise<void> {
 
 document.querySelectorAll<HTMLButtonElement>('.options-nav-item').forEach((item) => {
   item.addEventListener('click', () => {
-    activeSection = item.dataset.section === 'prompt' ? 'prompt' : 'model';
+    const section = item.dataset.section;
+    activeSection = section === 'prompt' || section === 'system-prompt' ? section : 'model';
     document.querySelectorAll('.options-nav-item').forEach((nav) => nav.classList.toggle('is-active', nav === item));
     renderActiveSection();
   });

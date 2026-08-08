@@ -1,6 +1,6 @@
 import * as Types from '../types';
 import { generateText } from '../ai/service';
-import { getModelState } from '../settings/storage';
+import { getModelState, getSystemPrompt } from '../settings/storage';
 import { buildPrompt } from './prompt';
 
 if (chrome.sidePanel) {
@@ -80,7 +80,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ error: '扩展已更新，请刷新当前页面后重试' } as Types.EnhanceResponse);
           return;
         }
-        const prompt = buildPrompt(actionPrompt, req.context);
+        const systemPrompt = await getSystemPrompt();
+        const prompt = buildPrompt(actionPrompt, req.context, systemPrompt);
         console.info(`[Quill] 最终生成提示词\n${prompt}`);
         const result = await generateTextWithTiming(model, prompt, '执行动作');
         sendResponse({ result } as Types.EnhanceResponse);
