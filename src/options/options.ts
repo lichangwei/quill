@@ -209,7 +209,7 @@ function renderSystemPrompt(): void {
   label.append(document.createTextNode('系统提示词'));
   const textarea = element('textarea') as HTMLTextAreaElement;
   textarea.id = 'system-prompt-input';
-  textarea.rows = 6;
+  textarea.rows = 16;
   textarea.maxLength = SYSTEM_PROMPT_MAX_LENGTH;
   textarea.placeholder = '例如：始终使用简体中文回复，语气专业简洁。';
   const count = element('span', 'char-count');

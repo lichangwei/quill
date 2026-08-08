@@ -47,20 +47,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'OPEN_EDITOR_SIDE_PANEL') {
     const state = msg.payload as Types.EditorState;
     const tabId = _sender.tab?.id;
+    if (!chrome.sidePanel || tabId === undefined) {
+      sendResponse({ error: '无法获取当前页面标签' });
+      return;
+    }
+    // 必须在收到消息后同步调用 open()，不能在其前面 await 任何异步操作，
+    // 否则会丢失用户手势（user gesture），导致 Chrome 报错拒绝打开侧边栏。
+    const openPromise = chrome.sidePanel.open({ tabId });
     (async () => {
       try {
-        if (!chrome.sidePanel || tabId === undefined) throw new Error('无法获取当前页面标签');
-        await chrome.storage.session.set({ editorState: { ...state, tabId } });
+        await openPromise;
         await chrome.sidePanel.setOptions({
           tabId,
           path: 'src/sidepanel/sidepanel.html',
           enabled: true,
         });
-        sendResponse({ requiresToolbarClick: true });
+        await chrome.storage.session.set({ editorState: { ...state, tabId } });
+        sendResponse({});
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[Quill] 打开 Chrome 侧边栏失败: ${message}`);
-        sendResponse({ error: message });
+        sendResponse({ error: message, requiresToolbarClick: true });
       }
     })();
     return true;
