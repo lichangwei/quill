@@ -10,6 +10,7 @@ import {
   updateModel,
   validateModelConfig,
 } from '../settings/storage';
+import { getActionGroups } from '../actions/storage';
 import * as Types from '../types';
 import './options.css';
 
@@ -29,6 +30,7 @@ const confirmAction = document.getElementById('confirm-action') as HTMLButtonEle
 let modelState: Types.ModelConfigState = { models: [], defaultModelId: null, activeModelId: null };
 let editingModelId: string | null = null;
 let confirmHandler: (() => Promise<void>) | null = null;
+let activeSection: 'model' | 'prompt' = 'model';
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -52,7 +54,7 @@ function badge(text: string, variant: 'success' | 'info' | 'default' = 'default'
   return element('span', `badge ${variant}`, text);
 }
 
-function sectionHeading(title: string, description: string, action: HTMLButtonElement): HTMLDivElement {
+function sectionHeading(title: string, description: string, action: HTMLElement): HTMLDivElement {
   const heading = element('div', 'section-heading heading-with-action');
   const copy = element('div');
   copy.append(element('h2', undefined, title), element('p', undefined, description));
@@ -151,10 +153,63 @@ function renderModels(): void {
   content.replaceChildren(section);
 }
 
+function renderPagePrompts(): void {
+  const section = element('section', 'settings-section');
+  section.append(sectionHeading('网页提示词', '查看已保存网页动作及其绑定信息。', element('span')));
+  void getActionGroups().then((groups) => {
+    const rows: HTMLTableRowElement[] = [];
+    for (const group of groups) {
+      const pageName = group.pageName || '未记录网页名称';
+      const fieldName = group.fieldName || '未记录输入框名称';
+      for (const action of group.actions) {
+        const row = document.createElement('tr');
+        [pageName, fieldName, action.name, action.prompt]
+          .forEach((value) => row.append(element('td', undefined, value)));
+        rows.push(row);
+      }
+    }
+    if (rows.length === 0) {
+      section.append(element('p', 'empty-state', '暂无网页提示词'));
+    } else {
+      const table = document.createElement('table');
+      table.className = 'prompt-table';
+      const head = document.createElement('tr');
+      ['网页名称', '输入框名称', '动作', '动作提示词']
+        .forEach((value) => head.append(element('th', undefined, value)));
+      const thead = document.createElement('thead');
+      thead.append(head);
+      const tbody = document.createElement('tbody');
+      tbody.append(...rows);
+      table.append(thead, tbody);
+      const wrapper = element('div', 'table-scroll');
+      wrapper.append(table);
+      section.append(wrapper);
+    }
+    if (activeSection === 'prompt') content.replaceChildren(section);
+  }).catch((error: unknown) => {
+    section.append(element('p', 'form-status error', error instanceof Error ? error.message : String(error)));
+    if (activeSection === 'prompt') content.replaceChildren(section);
+  });
+  content.replaceChildren(section);
+}
+
+function renderActiveSection(): void {
+  if (activeSection === 'prompt') renderPagePrompts();
+  else renderModels();
+}
+
 async function reload(): Promise<void> {
   modelState = await getModelState();
-  renderModels();
+  renderActiveSection();
 }
+
+document.querySelectorAll<HTMLButtonElement>('.options-nav-item').forEach((item) => {
+  item.addEventListener('click', () => {
+    activeSection = item.dataset.section === 'prompt' ? 'prompt' : 'model';
+    document.querySelectorAll('.options-nav-item').forEach((nav) => nav.classList.toggle('is-active', nav === item));
+    renderActiveSection();
+  });
+});
 
 document.querySelectorAll<HTMLButtonElement>('.dialog-close, .dialog-cancel').forEach((item) => {
   item.addEventListener('click', () => (item.closest('dialog') as HTMLDialogElement).close());

@@ -6,6 +6,7 @@ import type {
   StoredAction,
   StoredActionGroup,
 } from '../types';
+import { createIcons, icons } from 'lucide';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -18,6 +19,7 @@ import {
   targetToSelector,
 } from '../actions/storage';
 
+
 const app = document.querySelector<HTMLElement>('#app')!;
 let state: EditorState | null = null;
 let activeGroup: StoredActionGroup | null = null;
@@ -29,6 +31,11 @@ let draggingPromptTag: HTMLElement | null = null;
 let promptDropCaret: HTMLElement | null = null;
 let valueTooltip: HTMLDivElement | null = null;
 let valueRequestId = 0;
+createIcons({ icons });
+document.querySelector<HTMLButtonElement>('.settings-button')!.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
+});
+let refreshRequestId = 0;
 
 function field(name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   return document.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -51,9 +58,11 @@ function render(): void {
   app.innerHTML = `
     <section class="section">
       <h2 class="section-title">绑定范围</h2>
-      <div class="field"><label>URL 规则<input name="urlPattern" type="text" /></label></div>
-      <div class="field"><label>元素类型<select name="targetKind"><option value="id">ID</option><option value="selector">CSS 选择器</option></select></label></div>
-      <div class="field"><label>元素标识<input name="targetValue" type="text" /></label></div>
+      <div class="field"><label>网页名称<input name="pageName" type="text" /></label></div>
+      <div class="field" hidden><label>URL 规则<input name="urlPattern" type="text" /></label></div>
+      <div class="field" hidden><label>元素类型<select name="targetKind"><option value="id">ID</option><option value="selector">CSS 选择器</option></select></label></div>
+      <div class="field" hidden><label>元素标识<input name="targetValue" type="text" /></label></div>
+      <div class="field"><label>输入框名称<input name="fieldName" type="text" /></label></div>
     </section>
     <section class="section">
       <div class="toolbar"><h2 class="section-title">动作</h2></div>
@@ -80,6 +89,8 @@ function render(): void {
     </section>`;
 
   field('urlPattern').value = activeGroup.url;
+  field('pageName').value = activeGroup.pageName || state.pageName || '';
+  field('fieldName').value = activeGroup.fieldName || state.fieldName || '输入框';
   const target: ElementTarget = state && activeGroup.selector === targetToSelector(state.target)
     ? state.target
     : { kind: 'selector', value: activeGroup.selector };
@@ -563,6 +574,8 @@ async function submitAction(event: SubmitEvent): Promise<void> {
         url: field('urlPattern').value.trim(),
         selector: targetToSelector(target),
         actions: [...activeGroup.actions.filter((item) => item.id !== action.id), action],
+        pageName: field('pageName').value.trim(),
+        fieldName: field('fieldName').value.trim(),
       };
       await saveActionGroup(group, activeGroup);
       activeGroup = group;
@@ -598,17 +611,68 @@ async function loadState(value: unknown): Promise<void> {
   }
   activeGroup = state.group
     ? { ...state.group, actions: state.group.actions.map((action) => ({ ...action })) }
-    : { url: state.url, selector: targetToSelector(state.target), actions: [] };
+    : {
+      url: state.url,
+      selector: targetToSelector(state.target),
+      actions: [],
+      pageName: state.pageName,
+      fieldName: state.fieldName,
+    };
   render();
 }
 
+async function requestCurrentPageState(): Promise<EditorState | null | undefined> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabId = tab?.id;
+  if (tabId === undefined) return undefined;
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: 'GET_CURRENT_EDITOR_STATE' },
+      (response?: { state?: EditorState | null; error?: string }) => {
+        if (chrome.runtime.lastError || response?.error) {
+          resolve(undefined);
+          return;
+        }
+        resolve(response?.state ?? null);
+      },
+    );
+  });
+}
+
+async function refreshCurrentPageState(clearOnFailure = false): Promise<boolean> {
+  const requestId = ++refreshRequestId;
+  const currentState = await requestCurrentPageState();
+  if (requestId !== refreshRequestId) return false;
+  if (currentState === undefined) {
+    if (clearOnFailure) await loadState(null);
+    return false;
+  }
+  await loadState(currentState);
+  return true;
+}
+
 async function init(): Promise<void> {
-  const result = await chrome.storage.session.get('editorState');
-  await loadState(result.editorState);
+  if (!await refreshCurrentPageState()) {
+    const result = await chrome.storage.session.get('editorState');
+    await loadState(result.editorState);
+  }
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'session' && changes.editorState) {
-      void loadState(changes.editorState.newValue);
+      void refreshCurrentPageState(true);
     }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshCurrentPageState();
+  });
+  chrome.tabs.onActivated.addListener(() => {
+    void refreshCurrentPageState(true);
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status !== 'complete') return;
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id === tabId) void refreshCurrentPageState(true);
+    });
   });
 }
 

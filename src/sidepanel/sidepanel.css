@@ -4,9 +4,12 @@ body { margin: 0; min-width: 280px; font-size: 13px; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
-.topbar { position: sticky; top: 0; z-index: 1; padding: 16px 18px 14px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; }
+.topbar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 14px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; }
 .topbar h1 { margin: 0; color: #6344d8; font-size: 18px; }
 .topbar p { margin: 4px 0 0; color: #77727d; font-size: 12px; }
+.settings-button { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 1px solid #d9d7de; border-radius: 5px; background: #fff; color: #76727d; }
+.settings-button svg { width: 16px; height: 16px; }
+.settings-button:hover { color: #29272e; border-color: #bdb9c5; }
 main { padding: 16px; }
 .section { margin-bottom: 18px; }
 .section-title { margin: 0 0 9px; color: #46414b; font-size: 13px; font-weight: 650; }
