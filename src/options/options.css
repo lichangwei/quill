@@ -54,6 +54,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .button.danger { border-color: #b42318; background: #b42318; color: #fff; }
 .button.small { min-height: 30px; padding: 4px 8px; font-size: 12px; }
 .icon-button { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #69716b; font-size: 17px; }
+.icon-button svg { width: 16px; height: 16px; }
 .icon-button:hover:not(:disabled) { background: #f1f5f1; color: #292d2a; }
 .danger-text { color: #b42318; }
 

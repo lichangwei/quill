@@ -1,4 +1,5 @@
 import * as Types from '../types';
+import { createElement, Pencil } from 'lucide';
 import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
@@ -26,7 +27,7 @@ const PANEL_HTML = `
   <div class="quill-header">
     <span class="quill-title">✦ Quill</span>
     <span class="quill-header-actions">
-      <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作">✎</button>
+      <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作"></button>
       <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
     </span>
   </div>
@@ -156,6 +157,7 @@ export class QuillPanel {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = PANEL_HTML;
     this.shadow.append(wrapper);
+    this.shadow.querySelector('.quill-edit')!.append(createElement(Pencil, { 'aria-hidden': 'true' }));
     document.body.append(this.host);
     this.bindEvents();
   }

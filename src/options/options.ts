@@ -12,6 +12,7 @@ import {
 } from '../settings/storage';
 import { getActionGroups } from '../actions/storage';
 import * as Types from '../types';
+import { createElement, Pencil } from 'lucide';
 import './options.css';
 
 const content = document.getElementById('options-content') as HTMLElement;
@@ -135,9 +136,11 @@ function renderModels(): void {
       checkbox.setAttribute('aria-label', `${model.name}启用开关`);
       checkbox.addEventListener('change', () => void setModelEnabled(model.id, checkbox.checked).then(reload));
       toggle.append(checkbox, element('span', 'switch-track'));
+      const editButton = button('', 'icon-button', () => openModelDialog(model), `编辑${model.name}`);
+      editButton.append(createElement(Pencil, { 'aria-hidden': 'true' }));
       row.actions.append(
         toggle,
-        button('✎', 'icon-button', () => openModelDialog(model), `编辑${model.name}`),
+        editButton,
         button('☆', 'icon-button', () => void setDefaultModel(model.id).then(reload), `设${model.name}为默认`),
         button('×', 'icon-button danger-text', () => openConfirm(`确定要删除模型「${model.name}」吗？此操作无法撤销。`, async () => {
           await removeModel(model.id);
