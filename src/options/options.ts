@@ -65,6 +65,22 @@ function sectionHeading(title: string, description: string, action: HTMLElement)
   return heading;
 }
 
+let toastNode: HTMLDivElement | null = null;
+let toastTimer: number | undefined;
+
+function showToast(message: string, success = true): void {
+  if (!toastNode) {
+    toastNode = element('div', 'toast');
+    document.body.append(toastNode);
+  }
+  toastNode.textContent = message;
+  toastNode.className = `toast is-visible${success ? '' : ' error'}`;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toastNode?.classList.remove('is-visible');
+  }, 2000);
+}
+
 function showFormStatus(node: HTMLParagraphElement, message: string, success = false): void {
   node.hidden = !message;
   node.textContent = message;
@@ -264,7 +280,10 @@ function renderSystemPrompt(): void {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     void setSystemPrompt(textarea.value)
-      .then(() => showFormStatus(status, '已保存', true))
+      .then(() => {
+        showFormStatus(status, '');
+        showToast('保存成功');
+      })
       .catch((error: unknown) => showFormStatus(status, error instanceof Error ? error.message : String(error)));
   });
 }
@@ -307,6 +326,7 @@ modelForm.addEventListener('submit', (event) => {
   void operation.then(async () => {
     modelDialog.close();
     await reload();
+    showToast('保存成功');
   }).catch((saveError: unknown) => showFormStatus(modelStatus, saveError instanceof Error ? saveError.message : String(saveError)));
 });
 

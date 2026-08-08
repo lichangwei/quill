@@ -94,6 +94,26 @@ dialog::backdrop { background: rgb(23 27 24 / 45%); }
 .form-status.success { color: #177245; }
 .form-status.error { color: #b42318; }
 
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  z-index: 1000;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: #237044;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  pointer-events: none;
+}
+.toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { background: #b42318; }
+
 @media (max-width: 720px) {
   .options-shell { padding: 20px 12px 40px; }
   .options-layout { display: block; }
