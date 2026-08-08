@@ -8,7 +8,7 @@ export function buildPrompt(prompt: string, context: EnhanceRequest['context']):
     : context.content
       ? `${prompt}\n\n${context.content}`
       : prompt;
-  return `页面：${context.pageTitle}\n字段：${context.fieldLabel}\n\n${instruction}`;
+  return `当前页面标题：${context.pageTitle}\n当前字段：${context.fieldLabel}\n要求：只返回结果，不要任何解释。\n\n${instruction}`;
 }
 
 export function buildPageFieldPrompt(request: PageFieldRequest): string {
