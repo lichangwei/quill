@@ -52,7 +52,7 @@ function button(text: string, className: string, onClick: () => void): HTMLButto
 
 function render(): void {
   if (!state || !activeGroup) {
-    app.innerHTML = '<p class="empty">请从页面上的 Quill 按钮打开动作编辑。</p>';
+    app.innerHTML = '<p class="empty">请从页面上的嘴替按钮打开动作编辑。</p>';
     return;
   }
   app.innerHTML = `

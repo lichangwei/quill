@@ -20,7 +20,7 @@ function isValidInput(el: Element): el is TargetInput {
 function createButton(el: TargetInput): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.setAttribute(BUTTON_ATTR, 'true');
-  btn.title = 'Quill AI 优化';
+  btn.title = '嘴替 AI 优化';
   btn.textContent = '✦';
 
   Object.assign(btn.style, {

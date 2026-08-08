@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Quill - AI Input Enhancer",
+  "name": "嘴替 - AI Input Enhancer",
   "version": "0.1.0",
   "description": "AI-powered text enhancement for any input field",
   "permissions": [
@@ -30,7 +30,7 @@
     "default_path": "src/sidepanel/sidepanel.html"
   },
   "action": {
-    "default_title": "打开 Quill 侧边栏",
+    "default_title": "打开嘴替侧边栏",
     "default_icon": {
       "16": "public/icons/icon16.png",
       "48": "public/icons/icon48.png",

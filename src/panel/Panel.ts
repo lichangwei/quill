@@ -25,7 +25,7 @@ const PANEL_ID = 'quill-panel';
 const PANEL_HTML = `
 <div id="quill-panel-inner">
   <div class="quill-header">
-    <span class="quill-title">✦ Quill</span>
+    <span class="quill-title">✦ 嘴替</span>
     <span class="quill-header-actions">
       <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作"></button>
       <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
@@ -254,7 +254,7 @@ export class QuillPanel {
           console.error('[Quill] 打开 Chrome 侧边栏失败:', response.error);
           this.showError(response.error);
         } else if (response?.requiresToolbarClick) {
-          this.showError('编辑内容已准备好，请点击浏览器工具栏中的 Quill 图标打开侧边栏');
+          this.showError('编辑内容已准备好，请点击浏览器工具栏中的嘴替图标打开侧边栏');
         } else {
           this.hide();
         }
