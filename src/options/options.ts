@@ -11,8 +11,9 @@ const endpointField = document.getElementById('endpoint-field') as HTMLDivElemen
 
 const MODEL_DEFAULTS: Record<string, string> = {
   openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
+  claude: 'claude-opus-4-8',
 };
+const LEGACY_CLAUDE_DEFAULT = 'claude-3-5-sonnet-20241022';
 
 // 加载已保存的设置
 chrome.storage.sync.get(
@@ -22,7 +23,9 @@ chrome.storage.sync.get(
     providerEl.value = s.provider;
     apiKeyEl.value = s.apiKey;
     endpointEl.value = s.endpoint;
-    modelEl.value = s.model;
+    modelEl.value = s.provider === 'claude' && (!s.model || s.model === LEGACY_CLAUDE_DEFAULT)
+      ? MODEL_DEFAULTS.claude
+      : s.model;
     updateEndpointVisibility(s.provider);
   }
 );
@@ -31,7 +34,7 @@ chrome.storage.sync.get(
 providerEl.addEventListener('change', () => {
   const provider = providerEl.value;
   updateEndpointVisibility(provider);
-  if (!modelEl.value || Object.values(MODEL_DEFAULTS).includes(modelEl.value)) {
+  if (!modelEl.value || Object.values(MODEL_DEFAULTS).includes(modelEl.value) || modelEl.value === LEGACY_CLAUDE_DEFAULT) {
     modelEl.value = MODEL_DEFAULTS[provider] || '';
   }
 });

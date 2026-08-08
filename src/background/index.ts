@@ -49,8 +49,8 @@ async function callClaude(prompt: string, settings: Settings): Promise<string> {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: settings.model || 'claude-3-5-sonnet-20241022',
-      max_tokens: 2048,
+      model: settings.model || 'claude-opus-4-8',
+      max_tokens: 8192,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -66,6 +66,27 @@ async function callModel(prompt: string, settings: Settings): Promise<string> {
   return settings.provider === 'claude'
     ? callClaude(prompt, settings)
     : callOpenAI(prompt, settings);
+}
+
+async function callModelWithTiming(prompt: string, settings: Settings, requestType: string): Promise<string> {
+  const startedAt = performance.now();
+  const provider = settings.provider || 'openai';
+  const model = settings.model || (provider === 'claude' ? 'claude-opus-4-8' : 'gpt-4o');
+  try {
+    const result = await callModel(prompt, settings);
+    const elapsedMs = performance.now() - startedAt;
+    console.info(
+      `[Quill] 大模型处理完成：${requestType}，provider=${provider}，model=${model}，耗时=${elapsedMs.toFixed(0)}ms (${(elapsedMs / 1000).toFixed(2)}s)`
+    );
+    return result;
+  } catch (error) {
+    const elapsedMs = performance.now() - startedAt;
+    console.error(
+      `[Quill] 大模型处理失败：${requestType}，provider=${provider}，model=${model}，耗时=${elapsedMs.toFixed(0)}ms (${(elapsedMs / 1000).toFixed(2)}s)`,
+      error
+    );
+    throw error;
+  }
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -115,7 +136,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         const prompt = buildPrompt(actionPrompt, req.context);
         console.info(`[Quill] 最终生成提示词\n${prompt}`);
-        const result = await callModel(prompt, settings);
+        const result = await callModelWithTiming(prompt, settings, '执行动作');
         sendResponse({ result } as EnhanceResponse);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
@@ -139,7 +160,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         const extractionPrompt = buildPageFieldPrompt(req);
         console.info(`[Quill] 页面字段提取提示词\n${extractionPrompt}`);
-        const result = await callModel(extractionPrompt, settings);
+        const result = await callModelWithTiming(extractionPrompt, settings, `提取页面字段：${req.description}`);
         if (!result || result.includes(PAGE_FIELD_NOT_FOUND)) {
           sendResponse({ error: `未找到页面字段“${req.description}”` } as EnhanceResponse);
           return;

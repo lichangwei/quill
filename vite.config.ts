@@ -7,6 +7,9 @@ export default defineConfig({
     crx({ manifest }),
   ],
   build: {
+    // Chrome Extension 页面不需要 Vite 的 modulepreload；预加载链接会触发
+    // cross-world extension resource mismatch，并产生无效资源警告。
+    modulePreload: false,
     rollupOptions: {
       input: {
         options: 'src/options/options.html',
