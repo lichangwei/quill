@@ -13,7 +13,7 @@ import {
   updateModel,
   validateModelConfig,
 } from '../settings/storage';
-import { getActionGroups } from '../actions/storage';
+import { POLISH_ID, deleteAction, getActionGroups } from '../actions/storage';
 import * as Types from '../types';
 import './options.css';
 
@@ -63,6 +63,22 @@ function sectionHeading(title: string, description: string, action: HTMLElement)
   copy.append(element('h2', undefined, title), element('p', undefined, description));
   heading.append(copy, action);
   return heading;
+}
+
+let toastNode: HTMLDivElement | null = null;
+let toastTimer: number | undefined;
+
+function showToast(message: string, success = true): void {
+  if (!toastNode) {
+    toastNode = element('div', 'toast');
+    document.body.append(toastNode);
+  }
+  toastNode.textContent = message;
+  toastNode.className = `toast is-visible${success ? '' : ' error'}`;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toastNode?.classList.remove('is-visible');
+  }, 2000);
 }
 
 function showFormStatus(node: HTMLParagraphElement, message: string, success = false): void {
@@ -156,6 +172,19 @@ function renderModels(): void {
   content.replaceChildren(section);
 }
 
+function openPagePromptEditor(group: Types.StoredActionGroup, action: Types.StoredAction): void {
+  chrome.runtime.sendMessage(
+    { type: 'OPEN_EDITOR_FOR_ACTION', payload: { group, actionId: action.id } },
+    (response?: { error?: string }) => {
+      if (chrome.runtime.lastError) {
+        window.alert(chrome.runtime.lastError.message || '无法打开侧边栏');
+      } else if (response?.error) {
+        window.alert(response.error);
+      }
+    },
+  );
+}
+
 function renderPagePrompts(): void {
   const section = element('section', 'settings-section');
   section.append(sectionHeading('网页提示词', '查看已保存网页动作及其绑定信息。', element('span')));
@@ -168,6 +197,15 @@ function renderPagePrompts(): void {
         const row = document.createElement('tr');
         [pageName, fieldName, action.name, action.prompt]
           .forEach((value) => row.append(element('td', undefined, value)));
+        const actionsCell = element('td', 'prompt-table-actions');
+        actionsCell.append(button('编辑', 'text-action-button', () => openPagePromptEditor(group, action), `编辑${action.name}`));
+        if (action.id !== POLISH_ID) {
+          actionsCell.append(button('删除', 'text-action-button danger-text', () => openConfirm(`确定要删除动作「${action.name}」吗？此操作无法撤销。`, async () => {
+            await deleteAction(action.id);
+            renderPagePrompts();
+          }), `删除${action.name}`));
+        }
+        row.append(actionsCell);
         rows.push(row);
       }
     }
@@ -177,7 +215,7 @@ function renderPagePrompts(): void {
       const table = document.createElement('table');
       table.className = 'prompt-table';
       const head = document.createElement('tr');
-      ['网页名称', '输入框名称', '动作', '动作提示词']
+      ['网页名称', '输入框名称', '动作', '动作提示词', '操作']
         .forEach((value) => head.append(element('th', undefined, value)));
       const thead = document.createElement('thead');
       thead.append(head);
@@ -209,7 +247,7 @@ function renderSystemPrompt(): void {
   label.append(document.createTextNode('系统提示词'));
   const textarea = element('textarea') as HTMLTextAreaElement;
   textarea.id = 'system-prompt-input';
-  textarea.rows = 6;
+  textarea.rows = 16;
   textarea.maxLength = SYSTEM_PROMPT_MAX_LENGTH;
   textarea.placeholder = '例如：始终使用简体中文回复，语气专业简洁。';
   const count = element('span', 'char-count');
@@ -242,7 +280,10 @@ function renderSystemPrompt(): void {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     void setSystemPrompt(textarea.value)
-      .then(() => showFormStatus(status, '已保存', true))
+      .then(() => {
+        showFormStatus(status, '');
+        showToast('保存成功');
+      })
       .catch((error: unknown) => showFormStatus(status, error instanceof Error ? error.message : String(error)));
   });
 }
@@ -285,6 +326,7 @@ modelForm.addEventListener('submit', (event) => {
   void operation.then(async () => {
     modelDialog.close();
     await reload();
+    showToast('保存成功');
   }).catch((saveError: unknown) => showFormStatus(modelStatus, saveError instanceof Error ? saveError.message : String(saveError)));
 });
 

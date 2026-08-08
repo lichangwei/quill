@@ -210,6 +210,11 @@ export function targetToSelector(target: ElementTarget): string {
   return target.kind === 'id' ? `#${escapeIdentifier(target.value)}` : target.value;
 }
 
+export function selectorToTarget(selector: string): ElementTarget {
+  const idMatch = /^#([\w-]+)$/.exec(selector);
+  return idMatch ? { kind: 'id', value: idMatch[1] } : { kind: 'selector', value: selector };
+}
+
 export function selectorMatches(el: Element, selector: string): boolean {
   if (!selector) return true;
   try {

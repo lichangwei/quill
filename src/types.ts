@@ -70,4 +70,5 @@ export interface EditorState {
   tabId?: number;
   pageName?: string;
   fieldName?: string;
+  actionId?: string;
 }

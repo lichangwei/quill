@@ -691,6 +691,13 @@ async function loadState(value: unknown): Promise<void> {
       fieldName: state.fieldName,
     };
   render();
+  const actionId = state.actionId;
+  if (actionId) {
+    const action = actionId === POLISH_ID
+      ? mergePolishAction(await getActionGroups())[0]
+      : activeGroup.actions.find((item) => item.id === actionId);
+    if (action) openForm(action);
+  }
 }
 
 async function requestCurrentPageState(): Promise<EditorState | null | undefined> {
@@ -712,12 +719,20 @@ async function requestCurrentPageState(): Promise<EditorState | null | undefined
   });
 }
 
+async function loadStateFromSession(): Promise<void> {
+  const result = await chrome.storage.session.get('editorState');
+  await loadState(result.editorState);
+}
+
 async function refreshCurrentPageState(clearOnFailure = false): Promise<boolean> {
   const requestId = ++refreshRequestId;
   const currentState = await requestCurrentPageState();
   if (requestId !== refreshRequestId) return false;
   if (currentState === undefined) {
-    if (clearOnFailure) await loadState(null);
+    // 内容脚本未实现该消息（或页面尚未就绪）时不能直接清空面板，
+    // 否则新开标签页加载完成（tabs.onUpdated）等事件会把刚设置好的编辑状态清掉。
+    // 回退到已保存的会话状态，保证侧边栏始终展示最近一次打开的具体动作。
+    if (clearOnFailure) await loadStateFromSession();
     return false;
   }
   await loadState(currentState);
@@ -726,13 +741,11 @@ async function refreshCurrentPageState(clearOnFailure = false): Promise<boolean>
 
 async function init(): Promise<void> {
   if (!await refreshCurrentPageState()) {
-    const result = await chrome.storage.session.get('editorState');
-    await loadState(result.editorState);
+    await loadStateFromSession();
   }
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'session' && changes.editorState) {
-      // 铅笔按钮写入新编辑状态时，直接使用 storage 的新值刷新当前侧边栏。
-      // 不再请求页面脚本读取状态，避免请求失败把刚写入的状态清空。
+      // 直接使用新值渲染，避免依赖当前激活标签页（可能与目标标签页不同）的状态回传。
       void loadState(changes.editorState.newValue);
     }
   });
