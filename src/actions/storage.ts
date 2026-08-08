@@ -1,4 +1,10 @@
-import type { ElementTarget, StoredAction, StoredActionGroup } from '../types';
+import * as Types from '../types';
+
+type EditorState = Types.EditorState;
+type ElementTarget = Types.ElementTarget;
+type StoredAction = Types.StoredAction;
+type StoredActionGroup = Types.StoredActionGroup;
+type PageElementReference = Types.PageElementReference;
 
 export const ACTIONS_STORAGE_KEY = 'actions';
 export const POLISH_ID = 'polish';
@@ -23,6 +29,23 @@ function isStoredAction(value: unknown): value is StoredAction {
     && typeof action.prompt === 'string';
 }
 
+function normalizePageReferences(value: unknown): PageElementReference[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is PageElementReference => Boolean(item) && typeof item === 'object'
+    && typeof (item as Partial<PageElementReference>).name === 'string'
+    && typeof (item as Partial<PageElementReference>).selector === 'string')
+    .map((item) => ({ name: item.name, selector: item.selector }));
+}
+
+function normalizeStoredAction(action: StoredAction): StoredAction {
+  return {
+    id: action.id,
+    name: action.name,
+    prompt: action.prompt,
+    pageReferences: normalizePageReferences(action.pageReferences),
+  };
+}
+
 function isStoredActionGroup(value: unknown): value is StoredActionGroup {
   if (!value || typeof value !== 'object') return false;
   const group = value as Partial<StoredActionGroup>;
@@ -37,7 +60,7 @@ export function normalizeActionGroups(value: unknown): StoredActionGroup[] {
     return value.map((group) => ({
       url: group.url,
       selector: group.selector,
-      actions: group.actions.filter(isStoredAction),
+      actions: group.actions.filter(isStoredAction).map(normalizeStoredAction),
     }));
   }
 
@@ -49,7 +72,7 @@ export function normalizeActionGroups(value: unknown): StoredActionGroup[] {
     const selector = item.target ? targetToSelector(item.target) : '';
     const key = JSON.stringify([url, selector]);
     const group = groups.get(key) || { url, selector, actions: [] };
-    group.actions.push({ id: item.id, name: item.name, prompt: item.prompt });
+    group.actions.push(normalizeStoredAction(item));
     groups.set(key, group);
   }
   return Array.from(groups.values());
@@ -89,7 +112,8 @@ export function mergePolishAction(groups: StoredActionGroup[]): StoredAction[] {
   const override = groups
     .flatMap((group) => group.actions)
     .find((action) => action.id === POLISH_ID);
-  return [{ ...DEFAULT_POLISH_ACTION, prompt: override?.prompt || DEFAULT_POLISH_PROMPT }];
+  return [{ ...DEFAULT_POLISH_ACTION, prompt: override?.prompt || DEFAULT_POLISH_PROMPT,
+    pageReferences: override?.pageReferences?.map((reference) => ({ ...reference })) }];
 }
 
 export async function getActionGroups(): Promise<StoredActionGroup[]> {
@@ -112,7 +136,8 @@ export async function saveActionGroup(
   const normalized: StoredActionGroup = {
     url: group.url,
     selector: group.selector,
-    actions: group.actions.map((action) => ({ ...action })),
+    actions: group.actions.map((action) => ({ ...action,
+      pageReferences: action.pageReferences?.map((reference) => ({ ...reference })) })),
   };
   if (normalized.actions.length > 0) {
     const existing = groups.find((item) => sameBinding(item, normalized));
@@ -137,10 +162,12 @@ export async function deleteAction(id: string): Promise<void> {
   await storageSet(groups);
 }
 
-export async function savePolishAction(prompt: string): Promise<void> {
+export async function savePolishAction(prompt: string, pageReferences?: StoredAction['pageReferences']): Promise<void> {
   const groups = await storageGet();
   const globalGroup = groups.find((group) => group.url === '' && group.selector === '');
-  const polish = { ...DEFAULT_POLISH_ACTION, prompt };
+  const existingPolish = groups.flatMap((group) => group.actions).find((action) => action.id === POLISH_ID);
+  const polish = { ...DEFAULT_POLISH_ACTION, prompt,
+    pageReferences: (pageReferences ?? existingPolish?.pageReferences)?.map((reference) => ({ ...reference })) };
   if (globalGroup) {
     globalGroup.actions = [polish, ...globalGroup.actions.filter((action) => action.id !== POLISH_ID)];
   } else {
@@ -214,6 +241,21 @@ export function getMatchingActions(
     .flatMap((group) => group.actions)
     .filter((action) => action.id !== POLISH_ID);
   return [...mergePolishAction(groups), ...customActions];
+}
+
+export function buildEditorState(
+  groups: StoredActionGroup[],
+  url: string,
+  el: Element,
+): EditorState {
+  const target = generateElementTarget(el);
+  const group = getMatchingActionGroup(groups, url, el);
+  return {
+    url: group?.url || url,
+    selector: group?.selector || targetToSelector(target),
+    target,
+    group,
+  };
 }
 
 export function countSelectorMatches(selector: string, doc: Document = document): number {

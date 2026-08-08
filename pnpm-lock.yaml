@@ -11,6 +11,9 @@ importers:
       '@page-agent/page-controller':
         specifier: ^1.12.2
         version: 1.12.2
+      lucide:
+        specifier: ^1.30.0
+        version: 1.30.0
     devDependencies:
       '@crxjs/vite-plugin':
         specifier: ^2.7.1
@@ -476,6 +479,9 @@ packages:
   lru-cache@11.5.2:
     resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
     engines: {node: 20 || >=22}
+
+  lucide@1.30.0:
+    resolution: {integrity: sha512-K6fsjKaZmzrvDATXHpKdRRNresG/z5/RnGK6OPJRoZ5Pu4A/OOJRFM/BlGpDsUeRZl12Hj3ULmXqz1qObs6x3A==}
 
   magic-string@0.30.12:
     resolution: {integrity: sha512-Ea8I3sQMVXr8JhN4z+H/d8zwo+tYDgHE9+5G4Wnrwhs0gaK9fXTKx0Tw5Xwsd/bCPTTZNRAdpyzvoeORe9LYpw==}
@@ -1103,6 +1109,8 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.33.0
 
   lru-cache@11.5.2: {}
+
+  lucide@1.30.0: {}
 
   magic-string@0.30.12:
     dependencies:

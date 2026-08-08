@@ -1,8 +1,19 @@
-export interface Settings {
-  provider: 'openai' | 'claude';
+export interface ModelConfig {
+  baseUrl: string;
   apiKey: string;
-  model: string;
-  endpoint: string;
+  modelId: string;
+}
+
+export interface ModelProfile extends ModelConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface ModelConfigState {
+  models: ModelProfile[];
+  defaultModelId: string | null;
+  activeModelId: string | null;
 }
 
 export interface ElementTarget {
@@ -14,6 +25,16 @@ export interface StoredAction {
   id: string;
   name: string;
   prompt: string;
+  pageReferences?: PageElementReference[];
+}
+
+export interface PageElementReference {
+  name: string;
+  selector: string;
+}
+
+export interface ElementPickerResult extends PageElementReference {
+  tagName: string;
 }
 
 export interface StoredActionGroup {
@@ -38,18 +59,10 @@ export interface EnhanceResponse {
   error?: string;
 }
 
-export interface PageFieldRequest {
-  description: string;
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-}
-
-export type PageFieldResponse = EnhanceResponse;
-
 export interface EditorState {
   url: string;
   selector: string;
   target: ElementTarget;
   group: StoredActionGroup | null;
+  tabId?: number;
 }

@@ -1,4 +1,4 @@
-import type { EditorState, ElementTarget, StoredAction, StoredActionGroup } from '../types';
+import * as Types from '../types';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -12,9 +12,10 @@ import {
 } from '../actions/storage';
 
 const app = document.querySelector<HTMLElement>('#app')!;
-let state: EditorState | null = null;
-let activeGroup: StoredActionGroup | null = null;
-let editingAction: StoredAction | null = null;
+let state: Types.EditorState | null = null;
+let activeGroup: Types.StoredActionGroup | null = null;
+let editingAction: Types.StoredAction | null = null;
+let refreshRequestId = 0;
 
 function field(name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   return document.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -57,7 +58,7 @@ function render(): void {
     </section>`;
 
   field('urlPattern').value = activeGroup.url;
-  const target: ElementTarget = state && activeGroup.selector === targetToSelector(state.target)
+  const target: Types.ElementTarget = state && activeGroup.selector === targetToSelector(state.target)
     ? state.target
     : { kind: 'selector', value: activeGroup.selector };
   field('targetKind').value = target.kind;
@@ -88,7 +89,7 @@ async function renderActions(): Promise<void> {
   toolbar.append(newAction);
 }
 
-function openForm(action?: StoredAction): void {
+function openForm(action?: Types.StoredAction): void {
   editingAction = action || null;
   const form = document.querySelector<HTMLFormElement>('#action-form')!;
   field('name').value = action?.name || '';
@@ -110,7 +111,7 @@ async function submitAction(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   if (!state || !activeGroup) return;
   const isPolish = editingAction?.id === POLISH_ID;
-  const action: StoredAction = {
+  const action: Types.StoredAction = {
     id: isPolish ? POLISH_ID : editingAction?.id || crypto.randomUUID(),
     name: isPolish ? '润色' : field('name').value.trim(),
     prompt: field('prompt').value.trim(),
@@ -119,11 +120,11 @@ async function submitAction(event: SubmitEvent): Promise<void> {
     if (isPolish) {
       await savePolishAction(action.prompt);
     } else {
-      const target: ElementTarget = {
-        kind: field('targetKind').value as ElementTarget['kind'],
+      const target: Types.ElementTarget = {
+        kind: field('targetKind').value as Types.ElementTarget['kind'],
         value: field('targetValue').value.trim(),
       };
-      const group: StoredActionGroup = {
+      const group: Types.StoredActionGroup = {
         url: field('urlPattern').value.trim(),
         selector: targetToSelector(target),
         actions: [...activeGroup.actions.filter((item) => item.id !== action.id), action],
@@ -140,7 +141,7 @@ async function submitAction(event: SubmitEvent): Promise<void> {
   }
 }
 
-async function removeAction(action: StoredAction): Promise<void> {
+async function removeAction(action: Types.StoredAction): Promise<void> {
   if (!window.confirm(`确定删除动作“${action.name}”吗？`)) return;
   await deleteAction(action.id);
   if (activeGroup) activeGroup.actions = activeGroup.actions.filter((item) => item.id !== action.id);
@@ -155,7 +156,7 @@ async function resetPolish(): Promise<void> {
 }
 
 async function loadState(value: unknown): Promise<void> {
-  state = value as EditorState | undefined || null;
+  state = value as Types.EditorState | undefined || null;
   if (!state) {
     render();
     return;
@@ -166,13 +167,58 @@ async function loadState(value: unknown): Promise<void> {
   render();
 }
 
+async function requestCurrentPageState(): Promise<Types.EditorState | null | undefined> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabId = tab?.id;
+  if (tabId === undefined) return undefined;
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: 'GET_CURRENT_EDITOR_STATE' },
+      (response?: { state?: Types.EditorState | null; error?: string }) => {
+        if (chrome.runtime.lastError || response?.error) {
+          resolve(undefined);
+          return;
+        }
+        resolve(response?.state ?? null);
+      },
+    );
+  });
+}
+
+async function refreshCurrentPageState(clearOnFailure = false): Promise<boolean> {
+  const requestId = ++refreshRequestId;
+  const currentState = await requestCurrentPageState();
+  if (requestId !== refreshRequestId) return false;
+  if (currentState === undefined) {
+    if (clearOnFailure) await loadState(null);
+    return false;
+  }
+  await loadState(currentState);
+  return true;
+}
+
 async function init(): Promise<void> {
-  const result = await chrome.storage.session.get('editorState');
-  await loadState(result.editorState);
+  if (!await refreshCurrentPageState()) {
+    const result = await chrome.storage.session.get('editorState');
+    await loadState(result.editorState);
+  }
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'session' && changes.editorState) {
-      void loadState(changes.editorState.newValue);
+      void refreshCurrentPageState(true);
     }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshCurrentPageState();
+  });
+  chrome.tabs.onActivated.addListener(() => {
+    void refreshCurrentPageState(true);
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status !== 'complete') return;
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id === tabId) void refreshCurrentPageState(true);
+    });
   });
 }
 

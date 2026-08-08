@@ -7,46 +7,50 @@
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>✦ Quill 设置</h1>
-      <p class="subtitle">AI Input Enhancer</p>
+  <div class="options-shell">
+    <header class="options-header">
+      <div>
+        <p class="options-kicker">QUILL</p>
+        <h1>Quill 设置</h1>
+      </div>
+      <span class="options-header-note">本地配置 · 不上传输入内容</span>
     </header>
+    <div class="options-layout">
+      <nav class="options-sider" aria-label="设置导航">
+        <button type="button" class="options-nav-item is-active" data-section="model"><span aria-hidden="true">◇</span><span>模型</span></button>
+      </nav>
+      <main id="options-content" class="options-content"></main>
+    </div>
+  </div>
 
-    <form id="settings-form">
-      <section>
-        <h2>API 配置</h2>
-
-        <div class="field">
-          <label for="provider">API 提供商</label>
-          <select id="provider" name="provider">
-            <option value="openai">OpenAI（兼容格式）</option>
-            <option value="claude">Anthropic Claude</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="apiKey">API Key</label>
-          <input type="password" id="apiKey" name="apiKey" placeholder="sk-..." autocomplete="off" />
-        </div>
-
-        <div class="field" id="endpoint-field">
-          <label for="endpoint">自定义 Endpoint <span class="hint">（可选，留空使用默认）</span></label>
-          <input type="url" id="endpoint" name="endpoint" placeholder="https://api.openai.com/v1/chat/completions" />
-        </div>
-
-        <div class="field">
-          <label for="model">模型名称</label>
-          <input type="text" id="model" name="model" placeholder="gpt-4o / claude-opus-4-8" />
-        </div>
-      </section>
-
-      <div class="actions">
-        <button type="submit" class="btn-primary">保存设置</button>
-        <span id="save-status" class="save-status"></span>
+  <dialog id="model-dialog" class="dialog-panel">
+    <form id="model-form" method="dialog">
+      <div class="dialog-header"><h3 id="model-dialog-title">新增模型</h3><button type="button" class="icon-button dialog-close" aria-label="关闭" title="关闭">×</button></div>
+      <p class="dialog-description">模型信息只保存在本机，不会上传或同步到任何服务器。</p>
+      <div class="dialog-body form-stack">
+        <label>模型名称<input id="model-name" type="text" maxlength="30" placeholder="例如：工作 Qwen" /><span id="model-name-count" class="char-count">0/30</span></label>
+        <label>Base URL<input id="model-base-url" type="url" placeholder="https://api.example.com/v1" /></label>
+        <label>API Key<input id="model-api-key" type="password" autocomplete="off" placeholder="API Key" /></label>
+        <label>模型 ID<input id="model-id" type="text" placeholder="例如：qwen-plus" /></label>
+        <p id="model-form-status" class="form-status" hidden></p>
+      </div>
+      <div class="dialog-footer">
+        <button id="model-test" type="button" class="button secondary">测试连接</button>
+        <button type="button" class="button ghost dialog-cancel">取消</button>
+        <button id="model-save" type="submit" class="button primary">保存模型</button>
       </div>
     </form>
-  </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="dialog-panel dialog-panel-sm">
+    <div class="dialog-header"><h3 id="confirm-title">确认删除</h3><button type="button" class="icon-button dialog-close" aria-label="关闭" title="关闭">×</button></div>
+    <p id="confirm-description" class="confirm-description"></p>
+    <div class="dialog-footer">
+      <button type="button" class="button ghost dialog-cancel">取消</button>
+      <button id="confirm-action" type="button" class="button danger">删除</button>
+    </div>
+  </dialog>
+
   <script type="module" src="options.ts"></script>
 </body>
 </html>
