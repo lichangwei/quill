@@ -61,6 +61,8 @@ export function normalizeActionGroups(value: unknown): StoredActionGroup[] {
       url: group.url,
       selector: group.selector,
       actions: group.actions.filter(isStoredAction).map(normalizeStoredAction),
+      ...(group.pageName ? { pageName: group.pageName } : {}),
+      ...(group.fieldName ? { fieldName: group.fieldName } : {}),
     }));
   }
 
@@ -138,6 +140,8 @@ export async function saveActionGroup(
     selector: group.selector,
     actions: group.actions.map((action) => ({ ...action,
       pageReferences: action.pageReferences?.map((reference) => ({ ...reference })) })),
+    ...(group.pageName ? { pageName: group.pageName } : {}),
+    ...(group.fieldName ? { fieldName: group.fieldName } : {}),
   };
   if (normalized.actions.length > 0) {
     const existing = groups.find((item) => sameBinding(item, normalized));
@@ -250,12 +254,31 @@ export function buildEditorState(
 ): EditorState {
   const target = generateElementTarget(el);
   const group = getMatchingActionGroup(groups, url, el);
+  const pageName = typeof document !== 'undefined' ? document.title.trim() : '';
+  const fieldName = getElementName(el);
   return {
     url: group?.url || url,
     selector: group?.selector || targetToSelector(target),
     target,
     group,
+    ...(pageName ? { pageName } : {}),
+    ...(fieldName !== '输入框' ? { fieldName } : {}),
   };
+}
+
+function getElementName(el: Element): string {
+  const ariaLabel = el.getAttribute('aria-label')?.trim();
+  if (ariaLabel) return ariaLabel;
+  if (el.id && typeof document !== 'undefined') {
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${el.id}"]`);
+    if (label?.textContent?.trim()) return label.textContent.trim();
+  }
+  const closestLabel = el.closest('label')?.textContent?.trim();
+  if (closestLabel) return closestLabel;
+  const placeholder = el.getAttribute('placeholder')?.trim();
+  if (placeholder) return placeholder;
+  const name = el.getAttribute('name')?.trim();
+  return name || '输入框';
 }
 
 export function countSelectorMatches(selector: string, doc: Document = document): number {

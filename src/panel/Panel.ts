@@ -1,5 +1,6 @@
 import * as Types from '../types';
 import { getFieldContent, getFieldLabel, fillField, isContentEditableTarget, type EditableTarget } from '../content/filler';
+import { createElement, Pencil } from 'lucide';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -26,7 +27,7 @@ const PANEL_HTML = `
   <div class="quill-header">
     <span class="quill-title">✦ Quill</span>
     <span class="quill-header-actions">
-      <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作">✎</button>
+      <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作"></button>
       <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
     </span>
   </div>
@@ -85,12 +86,12 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 #quill-panel-inner {
-  width: min(400px, calc(100vw - 16px)); overflow: hidden; color: #29272e; background: #fff;
+  width: min(400px, calc(100vw - 16px)); max-height: min(300px, calc(100vh - 16px)); overflow-y: auto; color: #29272e; background: #fff;
   border: 1px solid #dddce2; border-radius: 8px; box-shadow: 0 8px 28px rgba(25,20,35,.18);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px;
 }
 #quill-panel-inner.editor-mode { width: 100%; height: 100%; max-height: none; overflow-y: auto; border-radius: 8px 0 0 8px; }
-.quill-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; }
+.quill-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; cursor: move; touch-action: none; }
 .quill-header-actions { display: flex; align-items: center; gap: 3px; }
 .quill-title { color: #6344d8; font-weight: 650; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
@@ -142,6 +143,8 @@ export class QuillPanel {
   private generatedTarget: Types.ElementTarget | null = null;
   private activeGroup: Types.StoredActionGroup | null = null;
   private forceSaveReady = false;
+  private panelDragged = false;
+  private panelDragState: { pointerId: number; startX: number; startY: number; startLeft: number; startTop: number } | null = null;
 
   constructor() {
     this.host = document.createElement('div');
@@ -154,6 +157,7 @@ export class QuillPanel {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = PANEL_HTML;
     this.shadow.append(wrapper);
+    this.shadow.querySelector('.quill-edit')!.append(createElement(Pencil, { 'aria-hidden': 'true' }));
     document.body.append(this.host);
     this.bindEvents();
   }
@@ -163,6 +167,11 @@ export class QuillPanel {
   }
 
   private bindEvents(): void {
+    const header = this.shadow.querySelector<HTMLElement>('.quill-header')!;
+    header.addEventListener('pointerdown', (event) => this.startPanelDrag(event));
+    header.addEventListener('pointermove', (event) => this.movePanelDrag(event));
+    header.addEventListener('pointerup', (event) => this.endPanelDrag(event));
+    header.addEventListener('pointercancel', (event) => this.endPanelDrag(event));
     this.shadow.querySelector('.quill-close')!.addEventListener('click', () => this.hide());
     this.shadow.querySelector('.quill-edit')!.addEventListener('click', () => {
       if (this.targetEl) void this.openEditorSidePanel();
@@ -203,9 +212,9 @@ export class QuillPanel {
         });
         return button;
       }));
-      this.showAt(anchorRect, Math.min(400, window.innerWidth - 16));
+      this.showAt(anchorRect);
     } catch (error) {
-      this.showAt(anchorRect, Math.min(400, window.innerWidth - 16));
+      this.showAt(anchorRect);
       this.showError(this.errorMessage(error));
     }
   }
@@ -261,6 +270,8 @@ export class QuillPanel {
     this.lastResult = '';
     this.activeGroup = null;
     this.inner.classList.toggle('editor-mode', editor);
+    this.panelDragged = false;
+    this.panelDragState = null;
     this.shadow.querySelector<HTMLElement>('.quill-action-list')!.hidden = editor;
     this.shadow.querySelector<HTMLElement>('.quill-editor')!.hidden = !editor;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = true;
@@ -462,6 +473,7 @@ export class QuillPanel {
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-loading')!.hidden = false;
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
+    this.reposition();
   }
 
   private showResult(result: string): void {
@@ -478,6 +490,7 @@ export class QuillPanel {
     const status = this.shadow.querySelector<HTMLElement>('.quill-result-status')!;
     status.hidden = true;
     status.textContent = '';
+    this.reposition();
   }
 
   private async copyResult(text: string): Promise<void> {
@@ -524,22 +537,68 @@ export class QuillPanel {
     } else {
       error.textContent = message;
     }
+    this.reposition();
   }
 
-  private showAt(anchorRect: DOMRect, panelWidth: number): void {
+  private reposition(): void {
+    if (this.panelDragged || !this.targetEl || this.host.style.display === 'none') return;
+    this.showAt(this.targetEl.getBoundingClientRect());
+  }
+
+  private startPanelDrag(event: PointerEvent): void {
+    if (this.inner.classList.contains('editor-mode') || this.host.style.display === 'none') return;
+    if ((event.target as Element).closest('button')) return;
+    const rect = this.host.getBoundingClientRect();
+    this.panelDragState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+    };
+    this.panelDragged = true;
+    event.currentTarget instanceof HTMLElement && event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  private movePanelDrag(event: PointerEvent): void {
+    if (!this.panelDragState || this.panelDragState.pointerId !== event.pointerId) return;
+    const { startX, startY, startLeft, startTop } = this.panelDragState;
+    const rect = this.host.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.min(Math.max(margin, startLeft + event.clientX - startX), Math.max(margin, window.innerWidth - rect.width - margin));
+    const top = Math.min(Math.max(margin, startTop + event.clientY - startY), Math.max(margin, window.innerHeight - rect.height - margin));
+    this.host.style.left = `${left}px`;
+    this.host.style.top = `${top}px`;
+    this.host.style.right = 'auto';
+    event.preventDefault();
+  }
+
+  private endPanelDrag(event: PointerEvent): void {
+    if (!this.panelDragState || this.panelDragState.pointerId !== event.pointerId) return;
+    if (event.currentTarget instanceof HTMLElement && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    this.panelDragState = null;
+  }
+
+  private showAt(anchorRect: DOMRect): void {
     this.host.style.display = 'block';
     this.host.style.right = 'auto';
     this.host.style.width = 'auto';
     this.host.style.height = 'auto';
     const margin = 6;
-    let left = anchorRect.right + margin;
-    let top = anchorRect.top;
-    if (left + panelWidth > window.innerWidth) {
-      left = Math.min(anchorRect.left, window.innerWidth - panelWidth - 8);
-      top = anchorRect.bottom + margin;
+    const panelWidth = this.inner.getBoundingClientRect().width;
+    let left = anchorRect.left;
+    if (left + panelWidth > window.innerWidth - 8) {
+      left = anchorRect.right - panelWidth;
     }
-    const maxHeight = this.inner.classList.contains('editor-mode') ? Math.min(680, window.innerHeight - 16) : Math.min(520, window.innerHeight - 16);
-    if (top + maxHeight > window.innerHeight) top = Math.max(8, window.innerHeight - maxHeight - 8);
+    const panelHeight = this.inner.getBoundingClientRect().height;
+    const spaceBelow = window.innerHeight - anchorRect.bottom - margin;
+    let top = spaceBelow >= 300
+      ? anchorRect.bottom + margin
+      : anchorRect.top - panelHeight - margin;
+    top = Math.min(top, window.innerHeight - panelHeight - 8);
     this.host.style.left = `${Math.max(8, left)}px`;
     this.host.style.top = `${Math.max(8, top)}px`;
   }

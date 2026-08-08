@@ -41,6 +41,8 @@ export interface StoredActionGroup {
   url: string;
   selector: string;
   actions: StoredAction[];
+  pageName?: string;
+  fieldName?: string;
 }
 
 export interface FieldContext {
@@ -66,4 +68,6 @@ export interface EditorState {
   target: ElementTarget;
   group: StoredActionGroup | null;
   tabId?: number;
+  pageName?: string;
+  fieldName?: string;
 }
