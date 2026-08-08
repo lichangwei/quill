@@ -1,6 +1,6 @@
 import * as Types from '../types';
 import { getFieldContent, getFieldLabel, fillField, isContentEditableTarget, type EditableTarget } from '../content/filler';
-import { createElement, Pencil } from 'lucide';
+import { createElement, Pencil, X } from 'lucide';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -28,7 +28,7 @@ const PANEL_HTML = `
     <span class="quill-title">✦ Quill</span>
     <span class="quill-header-actions">
       <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作"></button>
-      <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
+      <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭"></button>
     </span>
   </div>
   <div class="quill-action-list"></div>
@@ -96,6 +96,7 @@ button { cursor: pointer; }
 .quill-title { color: #6344d8; font-weight: 650; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
 .quill-icon-button svg, .quill-result-action svg { display: block; width: 16px; height: 16px; margin: auto; }
+.quill-close svg { width: 20px; height: 20px; }
 .quill-icon-button:hover { color: #29272e; }
 .quill-action-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
 .quill-action-button { min-width: 0; max-width: 100%; flex: 0 1 auto; min-height: 34px; padding: 7px 10px; overflow-wrap: anywhere; text-align: center; color: #38343e; background: #fafafa; border: 1px solid #dfdee4; border-radius: 6px; }
@@ -158,6 +159,7 @@ export class QuillPanel {
     wrapper.innerHTML = PANEL_HTML;
     this.shadow.append(wrapper);
     this.shadow.querySelector('.quill-edit')!.append(createElement(Pencil, { 'aria-hidden': 'true' }));
+    this.shadow.querySelector('.quill-close')!.append(createElement(X, { 'aria-hidden': 'true' }));
     document.body.append(this.host);
     this.bindEvents();
   }
