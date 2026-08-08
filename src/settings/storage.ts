@@ -3,7 +3,7 @@ import * as Types from '../types';
 export const MODEL_STORAGE_KEY = 'quill:model-config';
 export const MODEL_NAME_MAX_LENGTH = 30;
 export const SYSTEM_PROMPT_STORAGE_KEY = 'quill:system-prompt';
-export const SYSTEM_PROMPT_MAX_LENGTH = 200;
+export const SYSTEM_PROMPT_MAX_LENGTH = 800;
 
 const DEFAULT_MODEL_STATE: Types.ModelConfigState = {
   models: [],
