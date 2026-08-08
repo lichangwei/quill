@@ -1,4 +1,4 @@
-import type { EditorState, ElementTarget, EnhanceRequest, EnhanceResponse, StoredAction, StoredActionGroup } from '../types';
+import * as Types from '../types';
 import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
@@ -17,6 +17,7 @@ import {
 } from '../actions/storage';
 import { getPageReferences, resolvePageReferences } from '../page-context/placeholders';
 import { readPageContent } from '../page-context/reader';
+import { getModelState, getStyleState, setActiveModel, setActiveStyle } from '../settings/storage';
 
 const PANEL_ID = 'quill-panel';
 
@@ -28,6 +29,10 @@ const PANEL_HTML = `
       <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作">✎</button>
       <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
     </span>
+  </div>
+  <div class="quill-preferences">
+    <select class="quill-model-select" aria-label="选择模型" title="选择模型"></select>
+    <select class="quill-style-select" aria-label="选择写作风格" title="选择写作风格"></select>
   </div>
   <div class="quill-action-list"></div>
   <div class="quill-result" hidden>
@@ -88,6 +93,10 @@ button { cursor: pointer; }
 .quill-title { color: #6344d8; font-weight: 650; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
 .quill-icon-button:hover { color: #29272e; }
+.quill-preferences { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 8px 10px 0; }
+.quill-preferences select { min-width: 0; width: 100%; height: 30px; padding: 4px 6px; overflow: hidden; color: #514c58; background: #fff; border: 1px solid #dfdee4; border-radius: 6px; outline: none; text-overflow: ellipsis; }
+.quill-preferences select:focus { border-color: #6344d8; }
+.quill-preferences select:disabled { color: #8a858f; background: #f5f4f6; }
 .quill-action-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
 .quill-action-button { min-width: 0; max-width: 100%; flex: 0 1 auto; min-height: 34px; padding: 7px 10px; overflow-wrap: anywhere; text-align: center; color: #38343e; background: #fafafa; border: 1px solid #dfdee4; border-radius: 6px; }
 .quill-action-button:hover { color: #fff; background: #6344d8; border-color: #6344d8; }
@@ -122,10 +131,10 @@ export class QuillPanel {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
   private targetEl: TargetInput | null = null;
-  private lastAction: StoredAction | null = null;
+  private lastAction: Types.StoredAction | null = null;
   private lastResult = '';
-  private generatedTarget: ElementTarget | null = null;
-  private activeGroup: StoredActionGroup | null = null;
+  private generatedTarget: Types.ElementTarget | null = null;
+  private activeGroup: Types.StoredActionGroup | null = null;
   private forceSaveReady = false;
 
   constructor() {
@@ -163,6 +172,12 @@ export class QuillPanel {
     this.shadow.querySelector('.quill-new-action')!.addEventListener('click', () => this.openActionForm());
     this.shadow.querySelector('.quill-form-cancel')!.addEventListener('click', () => this.closeActionForm());
     this.shadow.querySelector('.quill-reset-polish')!.addEventListener('click', () => void this.resetPolish());
+    this.shadow.querySelector<HTMLSelectElement>('.quill-model-select')!.addEventListener('change', (event) => {
+      void setActiveModel((event.target as HTMLSelectElement).value);
+    });
+    this.shadow.querySelector<HTMLSelectElement>('.quill-style-select')!.addEventListener('change', (event) => {
+      void setActiveStyle((event.target as HTMLSelectElement).value);
+    });
     this.shadow.querySelector<HTMLFormElement>('.quill-action-form')!.addEventListener('submit', (event) => void this.submitAction(event));
     this.shadow.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('.quill-editor input, .quill-editor textarea, .quill-editor select')
       .forEach((field) => field.addEventListener('input', () => this.clearSaveWarning()));
@@ -174,7 +189,8 @@ export class QuillPanel {
   async showActions(target: TargetInput, anchorRect: DOMRect): Promise<void> {
     this.prepare(target, false);
     try {
-      const actions = getMatchingActions(await getActionGroups(), location.href, target);
+      const [groups] = await Promise.all([getActionGroups(), this.renderPreferences()]);
+      const actions = getMatchingActions(groups, location.href, target);
       const list = this.shadow.querySelector<HTMLElement>('.quill-action-list')!;
       list.replaceChildren(...actions.map((action) => {
         const button = document.createElement('button');
@@ -222,7 +238,7 @@ export class QuillPanel {
       const generatedTarget = generateElementTarget(this.targetEl);
       const groups = await getActionGroups();
       const matchedGroup = getMatchingActionGroup(groups, location.href, this.targetEl);
-      const state: EditorState = {
+      const state: Types.EditorState = {
         url: matchedGroup?.url || location.href,
         selector: matchedGroup?.selector || targetToSelector(generatedTarget),
         target: generatedTarget,
@@ -252,12 +268,31 @@ export class QuillPanel {
     this.lastResult = '';
     this.activeGroup = null;
     this.inner.classList.toggle('editor-mode', editor);
+    this.shadow.querySelector<HTMLElement>('.quill-preferences')!.hidden = editor;
     this.shadow.querySelector<HTMLElement>('.quill-action-list')!.hidden = editor;
     this.shadow.querySelector<HTMLElement>('.quill-editor')!.hidden = !editor;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-loading')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
     this.closeActionForm();
+  }
+
+  private async renderPreferences(): Promise<void> {
+    const [modelState, styleState] = await Promise.all([getModelState(), getStyleState()]);
+    const modelSelect = this.shadow.querySelector<HTMLSelectElement>('.quill-model-select')!;
+    const enabledModels = modelState.models.filter((model) => model.enabled);
+    const activeModelId = enabledModels.some((model) => model.id === modelState.activeModelId)
+      ? modelState.activeModelId
+      : enabledModels.find((model) => model.id === modelState.defaultModelId)?.id ?? enabledModels[0]?.id ?? '';
+    const modelOptions = enabledModels.map((model) => new Option(model.name, model.id));
+    if (modelOptions.length === 0) modelOptions.push(new Option('未配置模型', ''));
+    modelSelect.replaceChildren(...modelOptions);
+    modelSelect.value = activeModelId ?? '';
+    modelSelect.disabled = enabledModels.length === 0;
+
+    const styleSelect = this.shadow.querySelector<HTMLSelectElement>('.quill-style-select')!;
+    styleSelect.replaceChildren(...styleState.styles.map((style) => new Option(style.name, style.id)));
+    styleSelect.value = styleState.activeStyleId;
   }
 
   private async renderBoundActions(): Promise<void> {
@@ -294,7 +329,7 @@ export class QuillPanel {
     }
   }
 
-  private openActionForm(action?: StoredAction): void {
+  private openActionForm(action?: Types.StoredAction): void {
     if (!this.generatedTarget || !this.activeGroup) return;
     const form = this.shadow.querySelector<HTMLFormElement>('.quill-action-form')!;
     const isPolish = action?.id === POLISH_ID;
@@ -323,8 +358,8 @@ export class QuillPanel {
     if (!this.activeGroup) return;
     const id = this.formField('id').value;
     const isPolish = id === POLISH_ID;
-    const target: ElementTarget = {
-      kind: this.formField('targetKind').value as ElementTarget['kind'],
+    const target: Types.ElementTarget = {
+      kind: this.formField('targetKind').value as Types.ElementTarget['kind'],
       value: this.formField('targetValue').value.trim(),
     };
     const selector = targetToSelector(target);
@@ -340,7 +375,7 @@ export class QuillPanel {
       }
     }
 
-    const action: StoredAction = {
+    const action: Types.StoredAction = {
       id: isPolish ? POLISH_ID : id || crypto.randomUUID(),
       name: isPolish ? '润色' : this.formField('name').value.trim(),
       prompt: this.formField('prompt').value.trim(),
@@ -350,7 +385,7 @@ export class QuillPanel {
         await savePolishAction(action.prompt);
       } else {
         const actions = this.activeGroup.actions.filter((item) => item.id !== action.id);
-        const updatedGroup: StoredActionGroup = {
+        const updatedGroup: Types.StoredActionGroup = {
           url: this.formField('urlPattern').value.trim(),
           selector,
           actions: [...actions, action],
@@ -365,7 +400,7 @@ export class QuillPanel {
     }
   }
 
-  private async removeAction(action: StoredAction): Promise<void> {
+  private async removeAction(action: Types.StoredAction): Promise<void> {
     if (!window.confirm(`确定删除动作“${action.name}”吗？`)) return;
     try {
       await deleteAction(action.id);
@@ -407,7 +442,7 @@ export class QuillPanel {
     warning.textContent = message;
   }
 
-  private async runEnhance(action: StoredAction): Promise<void> {
+  private async runEnhance(action: Types.StoredAction): Promise<void> {
     if (!this.targetEl) return;
     const context = {
       pageTitle: document.title,
@@ -425,8 +460,8 @@ export class QuillPanel {
       const requestContext = pageReferences.length > 0 && !action.prompt.includes('{content}')
         ? { ...context, content: '' }
         : context;
-      const request: EnhanceRequest = { prompt, context: requestContext };
-      chrome.runtime.sendMessage({ type: 'ENHANCE_TEXT', payload: request }, (response?: EnhanceResponse) => {
+      const request: Types.EnhanceRequest = { prompt, context: requestContext };
+      chrome.runtime.sendMessage({ type: 'ENHANCE_TEXT', payload: request }, (response?: Types.EnhanceResponse) => {
         if (chrome.runtime.lastError) {
           this.showError(chrome.runtime.lastError.message || '通信错误');
         } else if (!response) {
@@ -465,8 +500,8 @@ export class QuillPanel {
     const error = this.shadow.querySelector<HTMLElement>('.quill-error')!;
     error.hidden = false;
     error.replaceChildren();
-    if (message.includes('API Key')) {
-      error.append(document.createTextNode('请先配置 API Key：'));
+    if (message.includes('模型配置') || message.includes('API Key') || message.includes('Base URL')) {
+      error.append(document.createTextNode('请先完成模型配置：'));
       const link = document.createElement('a');
       link.href = '#';
       link.textContent = '打开设置页';

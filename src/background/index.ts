@@ -1,4 +1,6 @@
-import type { EditorState, EnhanceRequest, EnhanceResponse, PageFieldRequest, Settings } from '../types';
+import * as Types from '../types';
+import { generateText } from '../ai/service';
+import { getModelState, getStyleState } from '../settings/storage';
 import { PAGE_FIELD_NOT_FOUND, buildPageFieldPrompt, buildPrompt } from './prompt';
 
 if (chrome.sidePanel) {
@@ -9,63 +11,21 @@ if (chrome.sidePanel) {
 
 const LEGACY_POLISH_PROMPT = '请润色以下文字，使其更专业流畅，保持原意，只返回结果，不要任何解释：\n\n{content}';
 
-async function getSettings(): Promise<Settings> {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(
-      { provider: 'openai', apiKey: '', model: 'gpt-4o', endpoint: '' },
-      (items) => resolve(items as unknown as Settings)
-    );
-  });
+async function getActiveModel(): Promise<Types.ModelProfile> {
+  const state = await getModelState();
+  const enabledModels = state.models.filter((model) => model.enabled);
+  const model = enabledModels.find((item) => item.id === state.activeModelId)
+    ?? enabledModels.find((item) => item.id === state.defaultModelId)
+    ?? enabledModels[0];
+  if (!model) throw new Error('尚未完成模型配置，请前往设置页添加并启用模型');
+  return model;
 }
 
-async function callOpenAI(prompt: string, settings: Settings): Promise<string> {
-  const endpoint = settings.endpoint || 'https://api.openai.com/v1/chat/completions';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model || 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`API error ${res.status}: ${err}`);
-  }
-  const data = await res.json();
-  return data.choices[0].message.content.trim();
-}
-
-async function callClaude(prompt: string, settings: Settings): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: settings.model || 'claude-3-5-sonnet-20241022',
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`API error ${res.status}: ${err}`);
-  }
-  const data = await res.json();
-  return data.content[0].text.trim();
-}
-
-async function callModel(prompt: string, settings: Settings): Promise<string> {
-  return settings.provider === 'claude'
-    ? callClaude(prompt, settings)
-    : callOpenAI(prompt, settings);
+async function getActiveStyle(): Promise<Types.WritingStyle> {
+  const state = await getStyleState();
+  return state.styles.find((style) => style.id === state.activeStyleId)
+    ?? state.styles.find((style) => style.id === state.defaultStyleId)
+    ?? state.styles[0];
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -74,7 +34,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
   if (msg.type === 'OPEN_EDITOR_SIDE_PANEL') {
-    const state = msg.payload as EditorState;
+    const state = msg.payload as Types.EditorState;
     const tabId = _sender.tab?.id;
     (async () => {
       try {
@@ -95,59 +55,51 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'ENHANCE_TEXT') {
-    const req = msg.payload as EnhanceRequest;
+    const req = msg.payload as Types.EnhanceRequest;
     (async () => {
       try {
-        const settings = await getSettings();
-        if (!settings.apiKey) {
-          sendResponse({ error: '请先在设置页配置 API Key' } as EnhanceResponse);
-          return;
-        }
-        const legacyTemplate = (req as EnhanceRequest & { template?: string }).template;
+        const [model, style] = await Promise.all([getActiveModel(), getActiveStyle()]);
+        const legacyTemplate = (req as Types.EnhanceRequest & { template?: string }).template;
         const actionPrompt = typeof req.prompt === 'string'
           ? req.prompt
           : legacyTemplate === 'polish'
             ? LEGACY_POLISH_PROMPT
             : null;
         if (!actionPrompt || !req.context) {
-          sendResponse({ error: '扩展已更新，请刷新当前页面后重试' } as EnhanceResponse);
+          sendResponse({ error: '扩展已更新，请刷新当前页面后重试' } as Types.EnhanceResponse);
           return;
         }
-        const prompt = buildPrompt(actionPrompt, req.context);
+        const prompt = buildPrompt(actionPrompt, req.context, style.description);
         console.info(`[Quill] 最终生成提示词\n${prompt}`);
-        const result = await callModel(prompt, settings);
-        sendResponse({ result } as EnhanceResponse);
+        const result = await generateText(model, prompt, { temperature: 0.7 });
+        sendResponse({ result } as Types.EnhanceResponse);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        sendResponse({ error: message } as EnhanceResponse);
+        sendResponse({ error: message } as Types.EnhanceResponse);
       }
     })();
     return true; // 保持异步通道
   }
   if (msg.type === 'EXTRACT_PAGE_FIELD') {
-    const req = msg.payload as PageFieldRequest;
+    const req = msg.payload as Types.PageFieldRequest;
     (async () => {
       try {
-        const settings = await getSettings();
-        if (!settings.apiKey) {
-          sendResponse({ error: '请先在设置页配置 API Key' } as EnhanceResponse);
-          return;
-        }
+        const model = await getActiveModel();
         if (!req?.description || !req.pageContent) {
-          sendResponse({ error: '页面字段读取参数不完整' } as EnhanceResponse);
+          sendResponse({ error: '页面字段读取参数不完整' } as Types.EnhanceResponse);
           return;
         }
         const extractionPrompt = buildPageFieldPrompt(req);
         console.info(`[Quill] 页面字段提取提示词\n${extractionPrompt}`);
-        const result = await callModel(extractionPrompt, settings);
+        const result = await generateText(model, extractionPrompt, { temperature: 0 });
         if (!result || result.includes(PAGE_FIELD_NOT_FOUND)) {
-          sendResponse({ error: `未找到页面字段“${req.description}”` } as EnhanceResponse);
+          sendResponse({ error: `未找到页面字段“${req.description}”` } as Types.EnhanceResponse);
           return;
         }
-        sendResponse({ result } as EnhanceResponse);
+        sendResponse({ result } as Types.EnhanceResponse);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        sendResponse({ error: message } as EnhanceResponse);
+        sendResponse({ error: message } as Types.EnhanceResponse);
       }
     })();
     return true;

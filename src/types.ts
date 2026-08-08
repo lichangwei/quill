@@ -1,8 +1,32 @@
-export interface Settings {
-  provider: 'openai' | 'claude';
+export interface ModelConfig {
+  baseUrl: string;
   apiKey: string;
-  model: string;
-  endpoint: string;
+  modelId: string;
+}
+
+export interface ModelProfile extends ModelConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface ModelConfigState {
+  models: ModelProfile[];
+  defaultModelId: string | null;
+  activeModelId: string | null;
+}
+
+export interface WritingStyle {
+  id: string;
+  name: string;
+  description: string;
+  builtIn: boolean;
+}
+
+export interface WritingStyleState {
+  styles: WritingStyle[];
+  defaultStyleId: string;
+  activeStyleId: string;
 }
 
 export interface ElementTarget {
