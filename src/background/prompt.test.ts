@@ -22,12 +22,6 @@ describe('buildPrompt', () => {
     );
   });
 
-  it('将当前写作风格加入文本生成提示词', () => {
-    expect(buildPrompt('请润色 {content}', context, '语言精炼，直接给出结论。')).toBe(
-      '页面：测试页\n字段：评论\n\n写作风格：语言精炼，直接给出结论。\n\n请润色 原始内容'
-    );
-  });
-
   it('构建不依赖 tool calling 的页面字段读取 prompt', () => {
     const prompt = buildPageFieldPrompt({
       description: '赠送对象',

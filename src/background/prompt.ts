@@ -2,14 +2,13 @@ import * as Types from '../types';
 
 export const PAGE_FIELD_NOT_FOUND = '__QUILL_PAGE_FIELD_NOT_FOUND__';
 
-export function buildPrompt(prompt: string, context: Types.EnhanceRequest['context'], styleDescription = ''): string {
+export function buildPrompt(prompt: string, context: Types.EnhanceRequest['context']): string {
   const instruction = prompt.includes('{content}')
     ? prompt.replaceAll('{content}', context.content)
     : context.content
       ? `${prompt}\n\n${context.content}`
       : prompt;
-  const styleInstruction = styleDescription ? `写作风格：${styleDescription}\n\n` : '';
-  return `页面：${context.pageTitle}\n字段：${context.fieldLabel}\n\n${styleInstruction}${instruction}`;
+  return `页面：${context.pageTitle}\n字段：${context.fieldLabel}\n${instruction}`;
 }
 
 export function buildPageFieldPrompt(request: Types.PageFieldRequest): string {

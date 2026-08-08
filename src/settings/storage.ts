@@ -1,27 +1,12 @@
 import * as Types from '../types';
 
 export const MODEL_STORAGE_KEY = 'quill:model-config';
-export const STYLE_STORAGE_KEY = 'quill:style-config';
 export const MODEL_NAME_MAX_LENGTH = 30;
-export const STYLE_NAME_MAX_LENGTH = 20;
-export const STYLE_DESCRIPTION_MAX_LENGTH = 200;
-
-export const BUILT_IN_STYLES: Types.WritingStyle[] = [
-  { id: 'formal', name: '正式', description: '语气正式、措辞严谨，适合对外或对上级沟通。', builtIn: true },
-  { id: 'concise', name: '简洁', description: '语言精炼，直接给出结论和必要信息，不做客套铺垫。', builtIn: true },
-  { id: 'friendly', name: '友好', description: '语气自然亲切，像同事间日常沟通，但仍保持专业。', builtIn: true },
-];
 
 const DEFAULT_MODEL_STATE: Types.ModelConfigState = {
   models: [],
   defaultModelId: null,
   activeModelId: null,
-};
-
-const DEFAULT_STYLE_STATE: Types.WritingStyleState = {
-  styles: BUILT_IN_STYLES,
-  defaultStyleId: 'formal',
-  activeStyleId: 'formal',
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -78,29 +63,6 @@ export function normalizeModelState(value: unknown): Types.ModelConfigState {
     activeModelId: typeof value.activeModelId === 'string' && models.some((model) => model.id === value.activeModelId)
       ? value.activeModelId
       : firstId,
-  };
-}
-
-function normalizeStyle(value: unknown): Types.WritingStyle | null {
-  if (!isRecord(value) || value.builtIn !== false) return null;
-  if (typeof value.id !== 'string' || typeof value.name !== 'string' || typeof value.description !== 'string') return null;
-  const name = value.name.trim().slice(0, STYLE_NAME_MAX_LENGTH);
-  const description = value.description.trim().slice(0, STYLE_DESCRIPTION_MAX_LENGTH);
-  return value.id && name && description ? { id: value.id, name, description, builtIn: false } : null;
-}
-
-export function normalizeStyleState(value: unknown): Types.WritingStyleState {
-  const customStyles = isRecord(value) && Array.isArray(value.styles)
-    ? value.styles.map(normalizeStyle).filter((style): style is Types.WritingStyle => style !== null)
-    : [];
-  const styles = BUILT_IN_STYLES.concat(customStyles);
-  const storedDefaultId = isRecord(value) && typeof value.defaultStyleId === 'string' ? value.defaultStyleId : '';
-  const storedActiveId = isRecord(value) && typeof value.activeStyleId === 'string' ? value.activeStyleId : '';
-  const defaultStyleId = styles.some((style) => style.id === storedDefaultId) ? storedDefaultId : DEFAULT_STYLE_STATE.defaultStyleId;
-  return {
-    styles,
-    defaultStyleId,
-    activeStyleId: styles.some((style) => style.id === storedActiveId) ? storedActiveId : defaultStyleId,
   };
 }
 
@@ -204,59 +166,5 @@ export async function setActiveModel(id: string): Promise<void> {
   if (state.models.some((model) => model.id === id)) {
     state.activeModelId = id;
     await saveModelState(state);
-  }
-}
-
-export async function getStyleState(): Promise<Types.WritingStyleState> {
-  return normalizeStyleState(await storageGet(chrome.storage.local, STYLE_STORAGE_KEY));
-}
-
-export async function saveStyleState(state: Types.WritingStyleState): Promise<void> {
-  await storageSet(STYLE_STORAGE_KEY, normalizeStyleState(state));
-}
-
-export async function addStyle(name: string, description: string): Promise<void> {
-  const state = await getStyleState();
-  state.styles.push({
-    id: createId('custom'),
-    name: name.trim().slice(0, STYLE_NAME_MAX_LENGTH),
-    description: description.trim().slice(0, STYLE_DESCRIPTION_MAX_LENGTH),
-    builtIn: false,
-  });
-  await saveStyleState(state);
-}
-
-export async function updateStyle(id: string, name: string, description: string): Promise<void> {
-  const state = await getStyleState();
-  state.styles = state.styles.map((style) => style.id === id && !style.builtIn ? {
-    ...style,
-    name: name.trim().slice(0, STYLE_NAME_MAX_LENGTH),
-    description: description.trim().slice(0, STYLE_DESCRIPTION_MAX_LENGTH),
-  } : style);
-  await saveStyleState(state);
-}
-
-export async function removeStyle(id: string): Promise<void> {
-  const state = await getStyleState();
-  const style = state.styles.find((item) => item.id === id);
-  if (!style || style.builtIn || state.defaultStyleId === id || state.activeStyleId === id) return;
-  state.styles = state.styles.filter((item) => item.id !== id);
-  await saveStyleState(state);
-}
-
-export async function setDefaultStyle(id: string): Promise<void> {
-  const state = await getStyleState();
-  if (state.styles.some((style) => style.id === id)) {
-    state.defaultStyleId = id;
-    state.activeStyleId = id;
-    await saveStyleState(state);
-  }
-}
-
-export async function setActiveStyle(id: string): Promise<void> {
-  const state = await getStyleState();
-  if (state.styles.some((style) => style.id === id)) {
-    state.activeStyleId = id;
-    await saveStyleState(state);
   }
 }

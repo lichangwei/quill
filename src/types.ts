@@ -16,19 +16,6 @@ export interface ModelConfigState {
   activeModelId: string | null;
 }
 
-export interface WritingStyle {
-  id: string;
-  name: string;
-  description: string;
-  builtIn: boolean;
-}
-
-export interface WritingStyleState {
-  styles: WritingStyle[];
-  defaultStyleId: string;
-  activeStyleId: string;
-}
-
 export interface ElementTarget {
   kind: 'id' | 'selector';
   value: string;

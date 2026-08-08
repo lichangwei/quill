@@ -2,20 +2,12 @@ import { testConnection } from '../ai/service';
 import {
   MODEL_NAME_MAX_LENGTH,
   MODEL_STORAGE_KEY,
-  STYLE_DESCRIPTION_MAX_LENGTH,
-  STYLE_NAME_MAX_LENGTH,
-  STYLE_STORAGE_KEY,
   addModel,
-  addStyle,
   getModelState,
-  getStyleState,
   removeModel,
-  removeStyle,
   setDefaultModel,
-  setDefaultStyle,
   setModelEnabled,
   updateModel,
-  updateStyle,
   validateModelConfig,
 } from '../settings/storage';
 import * as Types from '../types';
@@ -30,20 +22,12 @@ const modelApiKey = document.getElementById('model-api-key') as HTMLInputElement
 const modelId = document.getElementById('model-id') as HTMLInputElement;
 const modelStatus = document.getElementById('model-form-status') as HTMLParagraphElement;
 const modelTest = document.getElementById('model-test') as HTMLButtonElement;
-const styleDialog = document.getElementById('style-dialog') as HTMLDialogElement;
-const styleForm = document.getElementById('style-form') as HTMLFormElement;
-const styleName = document.getElementById('style-name') as HTMLInputElement;
-const styleDescription = document.getElementById('style-description') as HTMLTextAreaElement;
-const styleStatus = document.getElementById('style-form-status') as HTMLParagraphElement;
 const confirmDialog = document.getElementById('confirm-dialog') as HTMLDialogElement;
 const confirmDescription = document.getElementById('confirm-description') as HTMLParagraphElement;
 const confirmAction = document.getElementById('confirm-action') as HTMLButtonElement;
 
-let activeSection: 'model' | 'style' = 'model';
 let modelState: Types.ModelConfigState = { models: [], defaultModelId: null, activeModelId: null };
-let styleState: Types.WritingStyleState;
 let editingModelId: string | null = null;
-let editingStyleId: string | null = null;
 let confirmHandler: (() => Promise<void>) | null = null;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -110,17 +94,6 @@ function openModelDialog(model?: Types.ModelProfile): void {
   modelDialog.showModal();
 }
 
-function openStyleDialog(style?: Types.WritingStyle): void {
-  editingStyleId = style?.id ?? null;
-  (document.getElementById('style-dialog-title') as HTMLElement).textContent = style ? '编辑风格' : '新增风格';
-  styleName.value = style?.name ?? '';
-  styleDescription.value = style?.description ?? '';
-  updateCount(styleName, 'style-name-count', STYLE_NAME_MAX_LENGTH);
-  updateCount(styleDescription, 'style-description-count', STYLE_DESCRIPTION_MAX_LENGTH);
-  showFormStatus(styleStatus, '');
-  styleDialog.showModal();
-}
-
 function openConfirm(description: string, handler: () => Promise<void>): void {
   confirmDescription.textContent = description;
   confirmHandler = handler;
@@ -152,7 +125,6 @@ function renderModels(): void {
     for (const model of modelState.models) {
       const row = settingsListItem(model.name, `${model.modelId} · ${model.baseUrl}`);
       if (model.id === modelState.defaultModelId) row.titleRow.append(badge('默认', 'success'));
-      if (model.id === modelState.activeModelId) row.titleRow.append(badge('当前使用', 'info'));
       if (!model.enabled) row.titleRow.append(badge('已停用'));
       const toggle = element('label', 'switch-control');
       const checkbox = element('input') as HTMLInputElement;
@@ -179,62 +151,16 @@ function renderModels(): void {
   content.replaceChildren(section);
 }
 
-function renderStyles(): void {
-  const section = element('section', 'settings-section');
-  section.append(sectionHeading(
-    '写作风格',
-    '风格只影响文本生成。内置风格不可删除，默认和当前使用中的风格需要先切换后才能删除。',
-    button('新增风格', 'button primary', () => openStyleDialog()),
-  ));
-  const list = element('div', 'settings-list');
-  for (const style of styleState.styles) {
-    const row = settingsListItem(style.name, style.description);
-    const isDefault = style.id === styleState.defaultStyleId;
-    const isActive = style.id === styleState.activeStyleId;
-    if (isDefault) row.titleRow.append(badge('默认', 'success'));
-    if (isActive) row.titleRow.append(badge('当前使用', 'info'));
-    if (!style.builtIn) row.actions.append(button('✎', 'icon-button', () => openStyleDialog(style), `编辑${style.name}`));
-    const defaultButton = button('默认', 'button ghost small', () => void setDefaultStyle(style.id).then(reload), `设${style.name}为默认`);
-    defaultButton.disabled = isDefault;
-    const deleteButton = button('×', 'icon-button danger-text', () => openConfirm(`确定要删除风格「${style.name}」吗？此操作无法撤销。`, async () => {
-      await removeStyle(style.id);
-      await reload();
-    }), `删除${style.name}`);
-    deleteButton.disabled = style.builtIn || isDefault || isActive;
-    row.actions.append(defaultButton, deleteButton);
-    list.append(row.item);
-  }
-  section.append(list);
-  content.replaceChildren(section);
-}
-
-function render(): void {
-  if (activeSection === 'model') renderModels();
-  else renderStyles();
-}
-
 async function reload(): Promise<void> {
-  [modelState, styleState] = await Promise.all([getModelState(), getStyleState()]);
-  render();
+  modelState = await getModelState();
+  renderModels();
 }
-
-document.querySelectorAll<HTMLButtonElement>('.options-nav-item').forEach((item) => {
-  item.addEventListener('click', () => {
-    const section = item.dataset.section;
-    if (section !== 'model' && section !== 'style') return;
-    activeSection = section;
-    document.querySelectorAll('.options-nav-item').forEach((navItem) => navItem.classList.toggle('is-active', navItem === item));
-    render();
-  });
-});
 
 document.querySelectorAll<HTMLButtonElement>('.dialog-close, .dialog-cancel').forEach((item) => {
   item.addEventListener('click', () => (item.closest('dialog') as HTMLDialogElement).close());
 });
 
 modelName.addEventListener('input', () => updateCount(modelName, 'model-name-count', MODEL_NAME_MAX_LENGTH));
-styleName.addEventListener('input', () => updateCount(styleName, 'style-name-count', STYLE_NAME_MAX_LENGTH));
-styleDescription.addEventListener('input', () => updateCount(styleDescription, 'style-description-count', STYLE_DESCRIPTION_MAX_LENGTH));
 
 modelForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -268,21 +194,6 @@ modelTest.addEventListener('click', () => {
   });
 });
 
-styleForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const name = styleName.value.trim();
-  const description = styleDescription.value.trim();
-  if (!name || !description) {
-    showFormStatus(styleStatus, '请完整填写风格名称和描述');
-    return;
-  }
-  const operation = editingStyleId ? updateStyle(editingStyleId, name, description) : addStyle(name, description);
-  void operation.then(async () => {
-    styleDialog.close();
-    await reload();
-  }).catch((saveError: unknown) => showFormStatus(styleStatus, saveError instanceof Error ? saveError.message : String(saveError)));
-});
-
 confirmAction.addEventListener('click', () => {
   if (!confirmHandler) return;
   confirmAction.disabled = true;
@@ -294,7 +205,7 @@ confirmAction.addEventListener('click', () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && (MODEL_STORAGE_KEY in changes || STYLE_STORAGE_KEY in changes)) void reload();
+  if (areaName === 'local' && MODEL_STORAGE_KEY in changes) void reload();
 });
 
 void reload().catch((error: unknown) => {

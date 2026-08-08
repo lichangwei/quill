@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { StoredAction, StoredActionGroup } from '../types';
+import * as Types from '../types';
 import {
   DEFAULT_POLISH_ACTION,
   POLISH_ID,
+  buildEditorState,
   countTargetMatches,
   elementMatches,
   generateElementTarget,
@@ -65,15 +66,30 @@ describe('动作合并与匹配', () => {
   it('按 URL 与当前元素同时过滤，润色始终匹配', () => {
     document.body.innerHTML = '<textarea id="editor"></textarea><textarea id="other"></textarea>';
     const editor = document.querySelector('#editor')!;
-    const custom: StoredAction = {
+    const custom: Types.StoredAction = {
       id: 'custom', name: '翻译', prompt: 'translate',
     };
-    const groups: StoredActionGroup[] = [{
+    const groups: Types.StoredActionGroup[] = [{
       url: 'https://example.com/*', selector: '#editor', actions: [custom],
     }];
     expect(getMatchingActions(groups, 'https://example.com/page', editor)).toEqual([DEFAULT_POLISH_ACTION, custom]);
     expect(getMatchingActions(groups, 'https://other.example/page', editor)).toEqual([DEFAULT_POLISH_ACTION]);
     expect(getMatchingActions(groups, 'https://example.com/page', document.querySelector('#other')!)).toEqual([DEFAULT_POLISH_ACTION]);
+  });
+
+  it('生成与当前元素匹配的侧边栏状态', () => {
+    document.body.innerHTML = '<textarea id="editor"></textarea>';
+    const group: Types.StoredActionGroup = {
+      url: 'https://example.com/*',
+      selector: '#editor',
+      actions: [{ id: 'custom', name: '翻译', prompt: 'translate' }],
+    };
+    expect(buildEditorState([group], 'https://example.com/page', document.querySelector('textarea')!)).toEqual({
+      url: group.url,
+      selector: group.selector,
+      target: { kind: 'id', value: 'editor' },
+      group,
+    });
   });
 });
 

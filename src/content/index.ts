@@ -1,14 +1,17 @@
 import { QuillPanel } from '../panel/Panel';
+import { buildEditorState, getActionGroups } from '../actions/storage';
+import * as Types from '../types';
 
 const BUTTON_ATTR = 'data-quill-btn';
+const INPUT_SELECTOR = 'input, textarea';
 const panel = new QuillPanel();
 
 type TargetInput = HTMLInputElement | HTMLTextAreaElement;
+let activeTarget: TargetInput | null = null;
 
 function isValidInput(el: Element): el is TargetInput {
   if (el instanceof HTMLInputElement) {
-    const type = el.type.toLowerCase();
-    return ['text', 'search', 'email', 'url', 'tel', ''].includes(type);
+    return el.type.toLowerCase() === 'text';
   }
   return el instanceof HTMLTextAreaElement;
 }
@@ -50,6 +53,7 @@ function createButton(el: TargetInput): HTMLButtonElement {
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    activeTarget = el;
     const rect = el.getBoundingClientRect();
     void panel.showActions(el, rect);
   });
@@ -72,6 +76,7 @@ function attachToInput(el: TargetInput) {
   const btn = createButton(el);
 
   const show = () => {
+    activeTarget = el;
     positionButton(btn, el);
     btn.style.display = 'flex';
   };
@@ -98,13 +103,38 @@ function attachToInput(el: TargetInput) {
 }
 
 function scanInputs(root: Document | Element = document) {
-  const selector = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type]), textarea';
-  root.querySelectorAll<TargetInput>(selector).forEach((el) => {
-    if (!el.hasAttribute(BUTTON_ATTR)) {
+  root.querySelectorAll<TargetInput>(INPUT_SELECTOR).forEach((el) => {
+    if (isValidInput(el) && !el.hasAttribute(BUTTON_ATTR)) {
       attachToInput(el);
     }
   });
 }
+
+function getCurrentTarget(): TargetInput | null {
+  if (document.activeElement && isValidInput(document.activeElement)) {
+    return document.activeElement;
+  }
+  if (activeTarget?.isConnected) return activeTarget;
+  return Array.from(document.querySelectorAll(INPUT_SELECTOR)).find(isValidInput) || null;
+}
+
+chrome.runtime.onMessage.addListener((message: { type?: string }, _sender, sendResponse) => {
+  if (message.type !== 'GET_CURRENT_EDITOR_STATE') return;
+  const target = getCurrentTarget();
+  if (!target) {
+    sendResponse({ state: null });
+    return;
+  }
+  void getActionGroups()
+    .then((groups) => {
+      const state: Types.EditorState = buildEditorState(groups, location.href, target);
+      sendResponse({ state });
+    })
+    .catch((error: unknown) => {
+      sendResponse({ error: error instanceof Error ? error.message : String(error) });
+    });
+  return true;
+});
 
 // 初始扫描
 scanInputs();

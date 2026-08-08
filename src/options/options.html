@@ -18,7 +18,6 @@
     <div class="options-layout">
       <nav class="options-sider" aria-label="设置导航">
         <button type="button" class="options-nav-item is-active" data-section="model"><span aria-hidden="true">◇</span><span>模型</span></button>
-        <button type="button" class="options-nav-item" data-section="style"><span aria-hidden="true">≋</span><span>写作风格</span></button>
       </nav>
       <main id="options-content" class="options-content"></main>
     </div>
@@ -39,21 +38,6 @@
         <button id="model-test" type="button" class="button secondary">测试连接</button>
         <button type="button" class="button ghost dialog-cancel">取消</button>
         <button id="model-save" type="submit" class="button primary">保存模型</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="style-dialog" class="dialog-panel">
-    <form id="style-form" method="dialog">
-      <div class="dialog-header"><h3 id="style-dialog-title">新增风格</h3><button type="button" class="icon-button dialog-close" aria-label="关闭" title="关闭">×</button></div>
-      <div class="dialog-body form-stack">
-        <label>风格名称<input id="style-name" type="text" maxlength="20" placeholder="例如：商务跟进" /><span id="style-name-count" class="char-count">0/20</span></label>
-        <label>风格描述<textarea id="style-description" maxlength="200" rows="4" placeholder="例如：先给结论，段落简短，避免过度客套。"></textarea><span id="style-description-count" class="char-count">0/200</span></label>
-        <p id="style-form-status" class="form-status error" hidden></p>
-      </div>
-      <div class="dialog-footer">
-        <button type="button" class="button ghost dialog-cancel">取消</button>
-        <button type="submit" class="button primary">保存</button>
       </div>
     </form>
   </dialog>

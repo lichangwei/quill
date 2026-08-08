@@ -1,8 +1,10 @@
 import * as Types from '../types';
+import { createIcons, icons } from 'lucide';
 import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
+  buildEditorState,
   countSelectorMatches,
   deleteAction,
   generateElementTarget,
@@ -17,7 +19,6 @@ import {
 } from '../actions/storage';
 import { getPageReferences, resolvePageReferences } from '../page-context/placeholders';
 import { readPageContent } from '../page-context/reader';
-import { getModelState, getStyleState, setActiveModel, setActiveStyle } from '../settings/storage';
 
 const PANEL_ID = 'quill-panel';
 
@@ -30,18 +31,20 @@ const PANEL_HTML = `
       <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
     </span>
   </div>
-  <div class="quill-preferences">
-    <select class="quill-model-select" aria-label="选择模型" title="选择模型"></select>
-    <select class="quill-style-select" aria-label="选择写作风格" title="选择写作风格"></select>
-  </div>
   <div class="quill-action-list"></div>
   <div class="quill-result" hidden>
-    <div class="quill-result-text"></div>
-    <div class="quill-result-actions">
-      <button type="button" class="quill-primary quill-accept">接受</button>
-      <button type="button" class="quill-retry">重试</button>
-      <button type="button" class="quill-cancel">取消</button>
+    <div class="quill-result-header">
+      <strong>生成结果</strong>
     </div>
+    <div class="quill-result-body">
+      <p class="quill-result-text"></p>
+      <div class="quill-result-item-actions">
+        <button type="button" class="quill-result-action quill-replace">替换</button>
+        <button type="button" class="quill-result-action quill-copy">复制</button>
+        <button type="button" class="quill-result-action quill-regenerate">重试</button>
+      </div>
+    </div>
+    <div class="quill-result-status" role="status" hidden></div>
   </div>
   <div class="quill-loading" hidden>生成中...</div>
   <div class="quill-error" hidden></div>
@@ -83,7 +86,7 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 #quill-panel-inner {
-  width: 240px; overflow: hidden; color: #29272e; background: #fff;
+  width: min(400px, calc(100vw - 16px)); overflow: hidden; color: #29272e; background: #fff;
   border: 1px solid #dddce2; border-radius: 8px; box-shadow: 0 8px 28px rgba(25,20,35,.18);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px;
 }
@@ -92,18 +95,22 @@ button { cursor: pointer; }
 .quill-header-actions { display: flex; align-items: center; gap: 3px; }
 .quill-title { color: #6344d8; font-weight: 650; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
+.quill-icon-button svg, .quill-result-action svg { display: block; width: 16px; height: 16px; margin: auto; }
 .quill-icon-button:hover { color: #29272e; }
-.quill-preferences { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 8px 10px 0; }
-.quill-preferences select { min-width: 0; width: 100%; height: 30px; padding: 4px 6px; overflow: hidden; color: #514c58; background: #fff; border: 1px solid #dfdee4; border-radius: 6px; outline: none; text-overflow: ellipsis; }
-.quill-preferences select:focus { border-color: #6344d8; }
-.quill-preferences select:disabled { color: #8a858f; background: #f5f4f6; }
 .quill-action-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
 .quill-action-button { min-width: 0; max-width: 100%; flex: 0 1 auto; min-height: 34px; padding: 7px 10px; overflow-wrap: anywhere; text-align: center; color: #38343e; background: #fafafa; border: 1px solid #dfdee4; border-radius: 6px; }
 .quill-action-button:hover { color: #fff; background: #6344d8; border-color: #6344d8; }
 .quill-result, .quill-error, .quill-editor { padding: 12px; }
-.quill-result-text { max-height: 160px; overflow-y: auto; padding: 9px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; background: #f7f7f8; border-radius: 6px; }
-.quill-result-actions, .quill-form-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.quill-result-actions button, .quill-form-actions button, .quill-new-action { min-height: 32px; padding: 6px 11px; color: #45414a; background: #fff; border: 1px solid #d9d7de; border-radius: 6px; }
+.quill-result-header { display: flex; min-height: 28px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.quill-result-header strong { font-size: 13px; }
+.quill-result-body { max-height: min(440px, calc(100vh - 120px)); overflow-y: auto; padding: 9px; border: 1px solid #e0dfe4; border-radius: 6px; background: #fafafa; }
+.quill-result-text { min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #38343e; line-height: 1.5; }
+.quill-result-item-actions { display: flex; align-items: center; gap: 5px; margin-top: 8px; }
+.quill-result-action { min-width: 48px; height: 28px; padding: 0 10px; border: 1px solid #d9d7de; border-radius: 5px; background: #fff; color: #514c58; font-size: 12px; line-height: 26px; }
+.quill-result-action:hover { color: #fff; background: #6344d8; border-color: #6344d8; }
+.quill-result-status { margin-top: 8px; color: #177245; font-size: 12px; }
+.quill-form-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.quill-form-actions button, .quill-new-action { min-height: 32px; padding: 6px 11px; color: #45414a; background: #fff; border: 1px solid #d9d7de; border-radius: 6px; }
 .quill-primary { color: #fff !important; background: #6344d8 !important; border-color: #6344d8 !important; }
 .quill-loading { padding: 14px; text-align: center; color: #77727d; }
 .quill-error { color: #c22f3d; line-height: 1.45; }
@@ -148,6 +155,7 @@ export class QuillPanel {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = PANEL_HTML;
     this.shadow.append(wrapper);
+    createIcons({ icons, root: this.shadow });
     document.body.append(this.host);
     this.bindEvents();
   }
@@ -161,23 +169,17 @@ export class QuillPanel {
     this.shadow.querySelector('.quill-edit')!.addEventListener('click', () => {
       if (this.targetEl) void this.openEditorSidePanel();
     });
-    this.shadow.querySelector('.quill-cancel')!.addEventListener('click', () => this.hide());
-    this.shadow.querySelector('.quill-accept')!.addEventListener('click', () => {
+    this.shadow.querySelector('.quill-regenerate')!.addEventListener('click', () => {
+      if (this.lastAction) void this.runEnhance(this.lastAction);
+    });
+    this.shadow.querySelector('.quill-replace')!.addEventListener('click', () => {
       if (this.targetEl && this.lastResult) fillField(this.targetEl, this.lastResult);
       this.hide();
     });
-    this.shadow.querySelector('.quill-retry')!.addEventListener('click', () => {
-      if (this.lastAction) void this.runEnhance(this.lastAction);
-    });
+    this.shadow.querySelector('.quill-copy')!.addEventListener('click', () => void this.copyResult(this.lastResult));
     this.shadow.querySelector('.quill-new-action')!.addEventListener('click', () => this.openActionForm());
     this.shadow.querySelector('.quill-form-cancel')!.addEventListener('click', () => this.closeActionForm());
     this.shadow.querySelector('.quill-reset-polish')!.addEventListener('click', () => void this.resetPolish());
-    this.shadow.querySelector<HTMLSelectElement>('.quill-model-select')!.addEventListener('change', (event) => {
-      void setActiveModel((event.target as HTMLSelectElement).value);
-    });
-    this.shadow.querySelector<HTMLSelectElement>('.quill-style-select')!.addEventListener('change', (event) => {
-      void setActiveStyle((event.target as HTMLSelectElement).value);
-    });
     this.shadow.querySelector<HTMLFormElement>('.quill-action-form')!.addEventListener('submit', (event) => void this.submitAction(event));
     this.shadow.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('.quill-editor input, .quill-editor textarea, .quill-editor select')
       .forEach((field) => field.addEventListener('input', () => this.clearSaveWarning()));
@@ -189,7 +191,7 @@ export class QuillPanel {
   async showActions(target: TargetInput, anchorRect: DOMRect): Promise<void> {
     this.prepare(target, false);
     try {
-      const [groups] = await Promise.all([getActionGroups(), this.renderPreferences()]);
+      const groups = await getActionGroups();
       const actions = getMatchingActions(groups, location.href, target);
       const list = this.shadow.querySelector<HTMLElement>('.quill-action-list')!;
       list.replaceChildren(...actions.map((action) => {
@@ -203,9 +205,9 @@ export class QuillPanel {
         });
         return button;
       }));
-      this.showAt(anchorRect, 240);
+      this.showAt(anchorRect, Math.min(400, window.innerWidth - 16));
     } catch (error) {
-      this.showAt(anchorRect, 240);
+      this.showAt(anchorRect, Math.min(400, window.innerWidth - 16));
       this.showError(this.errorMessage(error));
     }
   }
@@ -235,15 +237,8 @@ export class QuillPanel {
   private async openEditorSidePanel(): Promise<void> {
     if (!this.targetEl) return;
     try {
-      const generatedTarget = generateElementTarget(this.targetEl);
       const groups = await getActionGroups();
-      const matchedGroup = getMatchingActionGroup(groups, location.href, this.targetEl);
-      const state: Types.EditorState = {
-        url: matchedGroup?.url || location.href,
-        selector: matchedGroup?.selector || targetToSelector(generatedTarget),
-        target: generatedTarget,
-        group: matchedGroup,
-      };
+      const state = buildEditorState(groups, location.href, this.targetEl);
       chrome.runtime.sendMessage({ type: 'OPEN_EDITOR_SIDE_PANEL', payload: state }, (response?: { error?: string; requiresToolbarClick?: boolean }) => {
         if (chrome.runtime.lastError) {
           console.error('[Quill] 打开 Chrome 侧边栏失败:', chrome.runtime.lastError.message);
@@ -268,31 +263,12 @@ export class QuillPanel {
     this.lastResult = '';
     this.activeGroup = null;
     this.inner.classList.toggle('editor-mode', editor);
-    this.shadow.querySelector<HTMLElement>('.quill-preferences')!.hidden = editor;
     this.shadow.querySelector<HTMLElement>('.quill-action-list')!.hidden = editor;
     this.shadow.querySelector<HTMLElement>('.quill-editor')!.hidden = !editor;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-loading')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
     this.closeActionForm();
-  }
-
-  private async renderPreferences(): Promise<void> {
-    const [modelState, styleState] = await Promise.all([getModelState(), getStyleState()]);
-    const modelSelect = this.shadow.querySelector<HTMLSelectElement>('.quill-model-select')!;
-    const enabledModels = modelState.models.filter((model) => model.enabled);
-    const activeModelId = enabledModels.some((model) => model.id === modelState.activeModelId)
-      ? modelState.activeModelId
-      : enabledModels.find((model) => model.id === modelState.defaultModelId)?.id ?? enabledModels[0]?.id ?? '';
-    const modelOptions = enabledModels.map((model) => new Option(model.name, model.id));
-    if (modelOptions.length === 0) modelOptions.push(new Option('未配置模型', ''));
-    modelSelect.replaceChildren(...modelOptions);
-    modelSelect.value = activeModelId ?? '';
-    modelSelect.disabled = enabledModels.length === 0;
-
-    const styleSelect = this.shadow.querySelector<HTMLSelectElement>('.quill-style-select')!;
-    styleSelect.replaceChildren(...styleState.styles.map((style) => new Option(style.name, style.id)));
-    styleSelect.value = styleState.activeStyleId;
   }
 
   private async renderBoundActions(): Promise<void> {
@@ -469,7 +445,6 @@ export class QuillPanel {
         } else if (response.error) {
           this.showError(response.error);
         } else if (response.result) {
-          this.lastResult = response.result;
           this.showResult(response.result);
         } else {
           this.showError('未生成结果');
@@ -481,17 +456,45 @@ export class QuillPanel {
   }
 
   private showLoading(): void {
-    this.shadow.querySelector<HTMLElement>('.quill-action-list')!.hidden = false;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-loading')!.hidden = false;
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
   }
 
-  private showResult(text: string): void {
+  private showResult(result: string): void {
     this.shadow.querySelector<HTMLElement>('.quill-loading')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = false;
-    this.shadow.querySelector<HTMLElement>('.quill-result-text')!.textContent = text;
+    this.lastResult = result;
+    this.shadow.querySelector<HTMLElement>('.quill-result-text')!.textContent = result;
+    const status = this.shadow.querySelector<HTMLElement>('.quill-result-status')!;
+    status.hidden = true;
+    status.textContent = '';
+  }
+
+  private async copyResult(text: string): Promise<void> {
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        this.shadow.append(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        textarea.remove();
+      }
+    } catch {
+      copied = false;
+    }
+    const status = this.shadow.querySelector<HTMLElement>('.quill-result-status')!;
+    status.hidden = false;
+    status.textContent = copied ? '已复制到剪贴板' : '复制失败，请手动复制';
+    status.style.color = copied ? '#177245' : '#c22f3d';
   }
 
   private showError(message: string): void {
@@ -527,7 +530,7 @@ export class QuillPanel {
       left = Math.min(anchorRect.left, window.innerWidth - panelWidth - 8);
       top = anchorRect.bottom + margin;
     }
-    const maxHeight = this.inner.classList.contains('editor-mode') ? Math.min(680, window.innerHeight - 16) : 240;
+    const maxHeight = this.inner.classList.contains('editor-mode') ? Math.min(680, window.innerHeight - 16) : Math.min(520, window.innerHeight - 16);
     if (top + maxHeight > window.innerHeight) top = Math.max(8, window.innerHeight - maxHeight - 8);
     this.host.style.left = `${Math.max(8, left)}px`;
     this.host.style.top = `${Math.max(8, top)}px`;

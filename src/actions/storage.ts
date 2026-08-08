@@ -1,4 +1,9 @@
-import type { ElementTarget, StoredAction, StoredActionGroup } from '../types';
+import * as Types from '../types';
+
+type EditorState = Types.EditorState;
+type ElementTarget = Types.ElementTarget;
+type StoredAction = Types.StoredAction;
+type StoredActionGroup = Types.StoredActionGroup;
 
 export const ACTIONS_STORAGE_KEY = 'actions';
 export const POLISH_ID = 'polish';
@@ -214,6 +219,21 @@ export function getMatchingActions(
     .flatMap((group) => group.actions)
     .filter((action) => action.id !== POLISH_ID);
   return [...mergePolishAction(groups), ...customActions];
+}
+
+export function buildEditorState(
+  groups: StoredActionGroup[],
+  url: string,
+  el: Element,
+): EditorState {
+  const target = generateElementTarget(el);
+  const group = getMatchingActionGroup(groups, url, el);
+  return {
+    url: group?.url || url,
+    selector: group?.selector || targetToSelector(target),
+    target,
+    group,
+  };
 }
 
 export function countSelectorMatches(selector: string, doc: Document = document): number {
