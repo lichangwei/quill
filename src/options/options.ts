@@ -12,7 +12,6 @@ import {
 } from '../settings/storage';
 import { getActionGroups } from '../actions/storage';
 import * as Types from '../types';
-import { createElement, Pencil } from 'lucide';
 import './options.css';
 
 const content = document.getElementById('options-content') as HTMLElement;
@@ -136,19 +135,17 @@ function renderModels(): void {
       checkbox.setAttribute('aria-label', `${model.name}启用开关`);
       checkbox.addEventListener('change', () => void setModelEnabled(model.id, checkbox.checked).then(reload));
       toggle.append(checkbox, element('span', 'switch-track'));
-      const editButton = button('', 'icon-button', () => openModelDialog(model), `编辑${model.name}`);
-      editButton.append(createElement(Pencil, { 'aria-hidden': 'true' }));
-      row.actions.append(
-        toggle,
-        editButton,
-        button('☆', 'icon-button', () => void setDefaultModel(model.id).then(reload), `设${model.name}为默认`),
-        button('×', 'icon-button danger-text', () => openConfirm(`确定要删除模型「${model.name}」吗？此操作无法撤销。`, async () => {
-          await removeModel(model.id);
-          await reload();
-        }), `删除${model.name}`),
-      );
-      (row.actions.children[2] as HTMLButtonElement).disabled = model.id === modelState.defaultModelId;
-      (row.actions.children[3] as HTMLButtonElement).disabled = modelState.models.length <= 1;
+      const isDefault = model.id === modelState.defaultModelId;
+      if (!isDefault) {
+        row.actions.append(button('默认', 'text-action-button', () => void setDefaultModel(model.id).then(reload), `设${model.name}为默认`));
+      }
+      row.actions.append(button('编辑', 'text-action-button', () => openModelDialog(model), `编辑${model.name}`));
+      const deleteButton = button('删除', 'text-action-button danger-text', () => openConfirm(`确定要删除模型「${model.name}」吗？此操作无法撤销。`, async () => {
+        await removeModel(model.id);
+        await reload();
+      }), `删除${model.name}`);
+      deleteButton.disabled = modelState.models.length <= 1;
+      row.actions.append(deleteButton, toggle);
       list.append(row.item);
     }
     section.append(list);
