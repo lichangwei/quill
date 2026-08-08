@@ -1,5 +1,5 @@
 import * as Types from '../types';
-import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
+import { getFieldContent, getFieldLabel, fillField, isContentEditableTarget, type EditableTarget } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -36,7 +36,7 @@ const PANEL_HTML = `
       <strong>生成结果</strong>
     </div>
     <div class="quill-result-body">
-      <p class="quill-result-text"></p>
+      <div class="quill-result-text"></div>
       <div class="quill-result-item-actions">
         <button type="button" class="quill-result-action quill-replace">替换</button>
         <button type="button" class="quill-result-action quill-copy">复制</button>
@@ -131,7 +131,7 @@ button { cursor: pointer; }
 .quill-form-warning { margin-top: 8px; padding: 8px; color: #8c5a00; background: #fff7df; border: 1px solid #edd28a; border-radius: 6px; }
 `;
 
-type TargetInput = HTMLInputElement | HTMLTextAreaElement;
+type TargetInput = EditableTarget;
 
 export class QuillPanel {
   private host: HTMLDivElement;
@@ -422,6 +422,7 @@ export class QuillPanel {
       pageTitle: document.title,
       fieldLabel: getFieldLabel(this.targetEl),
       content: getFieldContent(this.targetEl),
+      contentFormat: isContentEditableTarget(this.targetEl) ? 'html' as const : 'text' as const,
     };
     const pageReferences = getPageReferences(action.prompt);
     if (!context.content.trim() && pageReferences.length === 0) {
@@ -468,7 +469,12 @@ export class QuillPanel {
     this.shadow.querySelector<HTMLElement>('.quill-error')!.hidden = true;
     this.shadow.querySelector<HTMLElement>('.quill-result')!.hidden = false;
     this.lastResult = result;
-    this.shadow.querySelector<HTMLElement>('.quill-result-text')!.textContent = result;
+    const resultElement = this.shadow.querySelector<HTMLElement>('.quill-result-text')!;
+    if (this.targetEl && isContentEditableTarget(this.targetEl)) {
+      resultElement.innerHTML = result;
+    } else {
+      resultElement.textContent = result;
+    }
     const status = this.shadow.querySelector<HTMLElement>('.quill-result-status')!;
     status.hidden = true;
     status.textContent = '';

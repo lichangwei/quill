@@ -26,4 +26,15 @@ describe('readLabeledField', () => {
     document.body.innerHTML = '<label>其他字段</label><input value="内容" />';
     expect(readLabeledField('赠送对象')).toBeNull();
   });
+
+  it('读取 contenteditable 字段的 innerHTML', () => {
+    document.body.innerHTML = `
+      <div class="form-item">
+        <label>文章内容</label>
+        <div class="form-item__content">
+          <div contenteditable="true"><p style="color: red">正文</p></div>
+        </div>
+      </div>`;
+    expect(readLabeledField('文章内容')).toBe('<p style="color: red">正文</p>');
+  });
 });

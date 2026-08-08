@@ -34,6 +34,9 @@ export function readSelectedElement(selector: string): SelectedElementResult {
     }
   }
   if (element instanceof HTMLElement) {
+    if (element.isContentEditable || (element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false')) {
+      return { found: true, value: element.innerHTML.trim() };
+    }
     return { found: true, value: (element.innerText || element.textContent || '').trim() };
   }
   return { found: true, value: (element.textContent || '').trim() };

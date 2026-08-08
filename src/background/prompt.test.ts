@@ -21,4 +21,15 @@ describe('buildPrompt', () => {
       '当前页面标题：测试页\n当前字段：评论\n要求：只返回结果，不要任何解释。\n\n根据文章正文生成关键字'
     );
   });
+
+  it('HTML 富文本要求模型返回内联样式 HTML', () => {
+    const result = buildPrompt('润色：{content}', {
+      ...context,
+      content: '<p>原始内容</p>',
+      contentFormat: 'html',
+    });
+    expect(result).toContain('HTML 富文本');
+    expect(result).toContain('内联 style 属性');
+    expect(result).toContain('<p>原始内容</p>');
+  });
 });

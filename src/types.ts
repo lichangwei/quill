@@ -47,6 +47,7 @@ export interface FieldContext {
   pageTitle: string;
   fieldLabel: string;
   content: string;
+  contentFormat?: 'text' | 'html';
 }
 
 export interface EnhanceRequest {

@@ -1,4 +1,5 @@
 import { QuillPanel } from '../panel/Panel';
+import type { EditableTarget } from './filler';
 import { generateElementTarget, targetToSelector } from '../actions/storage';
 import { readSelectedElement } from '../page-context/reader';
 import type { ElementPickerResult } from '../types';
@@ -6,14 +7,14 @@ import type { ElementPickerResult } from '../types';
 const BUTTON_ATTR = 'data-quill-btn';
 const panel = new QuillPanel();
 
-type TargetInput = HTMLInputElement | HTMLTextAreaElement;
+type TargetInput = EditableTarget;
 
 function isValidInput(el: Element): el is TargetInput {
   if (el instanceof HTMLInputElement) {
     const type = el.type.toLowerCase();
     return ['text', 'search', 'email', 'url', 'tel', ''].includes(type);
   }
-  return el instanceof HTMLTextAreaElement;
+  return el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 }
 
 function createButton(el: TargetInput): HTMLButtonElement {
@@ -101,7 +102,7 @@ function attachToInput(el: TargetInput) {
 }
 
 function scanInputs(root: Document | Element = document) {
-  const selector = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type]), textarea';
+  const selector = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type]), textarea, [contenteditable]:not([contenteditable="false"])';
   root.querySelectorAll<TargetInput>(selector).forEach((el) => {
     if (!el.hasAttribute(BUTTON_ATTR)) {
       attachToInput(el);
@@ -169,7 +170,7 @@ function pickerElementValue(element: Element): string {
 }
 
 function pickerTargetAt(event: MouseEvent): Element | null {
-  const editableSelector = 'input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="textbox"]';
+  const editableSelector = 'input:not([type="hidden"]), textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
   const eventTarget = event.composedPath().find((node): node is Element => node instanceof Element);
   const editableTarget = eventTarget?.closest(editableSelector);
   if (editableTarget) return editableTarget;

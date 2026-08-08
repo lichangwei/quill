@@ -13,6 +13,10 @@ function controlValue(element: Element): string {
   if (element instanceof HTMLSelectElement) {
     return Array.from(element.selectedOptions).map((option) => option.text.trim()).filter(Boolean).join('、');
   }
+  if (element instanceof HTMLElement
+    && (element.isContentEditable || (element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false'))) {
+    return element.innerHTML.trim();
+  }
   return textOf(element);
 }
 
@@ -23,7 +27,7 @@ function contentValue(container: Element): string {
   const selectedText = Array.from(selectedItems).map(textOf).filter(Boolean).join('、');
   if (selectedText) return selectedText;
 
-  const controls = container.querySelectorAll('input, textarea, select, [contenteditable="true"]');
+  const controls = container.querySelectorAll('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
   for (const control of controls) {
     const value = controlValue(control);
     if (value) return value;
