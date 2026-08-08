@@ -93,7 +93,7 @@ button { cursor: pointer; }
 #quill-panel-inner.editor-mode { width: 100%; height: 100%; max-height: none; overflow-y: auto; border-radius: 8px 0 0 8px; }
 .quill-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; cursor: move; touch-action: none; }
 .quill-header-actions { display: flex; align-items: center; gap: 3px; }
-.quill-title { color: #6344d8; font-weight: 650; }
+.quill-title { color: #6344d8; font-size: 16px; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
 .quill-icon-button svg, .quill-result-action svg { display: block; width: 16px; height: 16px; margin: auto; }
 .quill-close svg { width: 20px; height: 20px; }

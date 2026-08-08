@@ -13,6 +13,25 @@ button { cursor: pointer; }
 main { padding: 16px; }
 .section { margin-bottom: 18px; }
 .section-title { margin: 0 0 9px; color: #46414b; font-size: 13px; font-weight: 650; }
+.metadata-section { padding-bottom: 4px; border-bottom: 1px solid #e8e6eb; }
+.meta-status { min-height: 0; color: #c22f3d; font-size: 12px; }
+.meta-row { margin-bottom: 10px; }
+.meta-display, .meta-editor { display: flex; align-items: center; gap: 7px; min-height: 34px; }
+.meta-display { min-width: 0; }
+.meta-value-wrap { display: inline-flex; min-width: 0; max-width: calc(100% - 76px); align-items: center; gap: 2px; padding: 3px 4px 3px 6px; cursor: pointer; border: 1px dashed transparent; border-radius: 5px; }
+.meta-value-wrap:hover { border-color: #bdb9c5; background: #faf9fc; }
+.meta-label { flex: 0 0 68px; color: #5c5762; font-weight: 650; }
+.meta-value { min-width: 0; flex: 0 1 auto; overflow: hidden; color: #29272e; text-overflow: ellipsis; white-space: nowrap; }
+.meta-edit, .meta-save, .meta-cancel { display: inline-flex; width: 26px; height: 26px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #77727d; opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+.meta-value-wrap:hover .meta-edit, .meta-edit:focus-visible, .meta-editor button { opacity: 1; }
+.meta-edit:hover { color: #6344d8; background: #f0edff; }
+.meta-save { color: #177245; }
+.meta-cancel { color: #bd3040; }
+.meta-save:hover { background: #eaf7ef; }
+.meta-cancel:hover { background: #fff0f1; }
+.meta-editor input { min-width: 0; flex: 1; width: auto; padding: 7px 8px; color: #29272e; background: #fff; border: 1px solid #d5d2da; border-radius: 6px; outline: none; }
+.meta-editor input:focus { border-color: #6344d8; }
+.meta-editor svg, .meta-edit svg { width: 16px; height: 16px; }
 .field { margin-bottom: 11px; }
 .field label { display: block; margin-bottom: 5px; color: #5c5762; font-weight: 600; }
 .field input, .field textarea, .field select, .prompt-editor { width: 100%; padding: 8px 9px; color: #29272e; background: #fff; border: 1px solid #d5d2da; border-radius: 6px; outline: none; }
@@ -40,8 +59,9 @@ main { padding: 16px; }
 .reference-name-form label { margin-bottom: 7px; }
 .reference-name-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .reference-name-actions button { min-height: 29px; padding: 5px 9px; color: #514c58; background: #fff; border: 1px solid #dedce2; border-radius: 5px; }
-.action-list { display: flex; flex-direction: column; gap: 7px; }
-.action-row { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 7px 6px 10px; border: 1px solid #e0dfe4; border-radius: 6px; }
+.action-list { display: flex; flex-direction: column; gap: 0; border-top: 1px solid #e0dfe4; border-bottom: 1px solid #e0dfe4; }
+.action-row { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 2px; border-bottom: 1px solid #e0dfe4; }
+.action-row:last-child { border-bottom: 0; }
 .action-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .action-row button, .toolbar button, .form-actions button { min-height: 31px; padding: 6px 10px; color: #514c58; background: #fff; border: 1px solid #dedce2; border-radius: 5px; }
 .action-row .delete { color: #bd3040; }

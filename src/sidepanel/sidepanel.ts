@@ -6,7 +6,7 @@ import type {
   StoredAction,
   StoredActionGroup,
 } from '../types';
-import { createIcons, icons } from 'lucide';
+import { createElement, Check, createIcons, icons, Pencil, X } from 'lucide';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -41,6 +41,65 @@ function field(name: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelec
   return document.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 }
 
+type MetaField = 'pageName' | 'fieldName';
+
+function metaValue(name: MetaField): string {
+  if (!activeGroup || !state) return '';
+  const value = name === 'pageName'
+    ? activeGroup.pageName || state.pageName
+    : activeGroup.fieldName || state.fieldName || '输入框';
+  return (value || '').trim();
+}
+
+function setMetaEditing(name: MetaField, editing: boolean): void {
+  const row = document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"]`);
+  if (!row) return;
+  row.classList.toggle('editing', editing);
+  row.querySelector<HTMLElement>('.meta-display')!.hidden = editing;
+  row.querySelector<HTMLElement>('.meta-editor')!.hidden = !editing;
+  if (editing) row.querySelector<HTMLInputElement>('input')!.focus();
+}
+
+async function saveMetaField(name: MetaField): Promise<void> {
+  if (!activeGroup) return;
+  const value = field(name).value.trim();
+  const updatedGroup: StoredActionGroup = { ...activeGroup, [name]: value };
+  await saveActionGroup(updatedGroup, activeGroup);
+  activeGroup = updatedGroup;
+  if (state) state = { ...state, group: updatedGroup, [name]: value };
+  render();
+}
+
+function bindMetaEditors(): void {
+  (['pageName', 'fieldName'] as MetaField[]).forEach((name) => {
+    const row = document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"]`)!;
+    row.querySelector<HTMLElement>('.meta-value-wrap')!.addEventListener('click', (event) => {
+      if ((event.target as HTMLElement).closest('button')) return;
+      setMetaEditing(name, true);
+    });
+    row.querySelector<HTMLButtonElement>('.meta-edit')!.addEventListener('click', () => setMetaEditing(name, true));
+    row.querySelector<HTMLButtonElement>('.meta-save')!.addEventListener('click', () => {
+      void saveMetaField(name).catch((error) => {
+        const status = document.querySelector<HTMLElement>('.meta-status')!;
+        status.textContent = error instanceof Error ? error.message : String(error);
+      });
+    });
+    row.querySelector<HTMLButtonElement>('.meta-cancel')!.addEventListener('click', () => {
+      field(name).value = metaValue(name);
+      setMetaEditing(name, false);
+    });
+    row.querySelector<HTMLInputElement>('input')!.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void saveMetaField(name);
+      } else if (event.key === 'Escape') {
+        field(name).value = metaValue(name);
+        setMetaEditing(name, false);
+      }
+    });
+  });
+}
+
 function button(text: string, className: string, onClick: () => void): HTMLButtonElement {
   const element = document.createElement('button');
   element.type = 'button';
@@ -56,13 +115,19 @@ function render(): void {
     return;
   }
   app.innerHTML = `
-    <section class="section">
-      <h2 class="section-title">绑定范围</h2>
-      <div class="field"><label>网页名称<input name="pageName" type="text" /></label></div>
+    <section class="section metadata-section">
+      <div class="meta-status" aria-live="polite"></div>
+      <div class="meta-row" data-meta="pageName">
+        <div class="meta-display"><span class="meta-label">网页名称</span><span class="meta-value-wrap"><span class="meta-value"></span><button type="button" class="meta-edit" title="编辑网页名称" aria-label="编辑网页名称"></button></span></div>
+        <div class="meta-editor" hidden><span class="meta-label">网页名称</span><input name="pageName" type="text" /><button type="button" class="meta-save" title="保存" aria-label="保存"></button><button type="button" class="meta-cancel" title="取消" aria-label="取消"></button></div>
+      </div>
+      <div class="meta-row" data-meta="fieldName">
+        <div class="meta-display"><span class="meta-label">绑定元素</span><span class="meta-value-wrap"><span class="meta-value"></span><button type="button" class="meta-edit" title="编辑绑定元素" aria-label="编辑绑定元素"></button></span></div>
+        <div class="meta-editor" hidden><span class="meta-label">绑定元素</span><input name="fieldName" type="text" /><button type="button" class="meta-save" title="保存" aria-label="保存"></button><button type="button" class="meta-cancel" title="取消" aria-label="取消"></button></div>
+      </div>
       <div class="field" hidden><label>URL 规则<input name="urlPattern" type="text" /></label></div>
       <div class="field" hidden><label>元素类型<select name="targetKind"><option value="id">ID</option><option value="selector">CSS 选择器</option></select></label></div>
       <div class="field" hidden><label>元素标识<input name="targetValue" type="text" /></label></div>
-      <div class="field"><label>输入框名称<input name="fieldName" type="text" /></label></div>
     </section>
     <section class="section">
       <div class="toolbar"><h2 class="section-title">动作</h2></div>
@@ -89,8 +154,15 @@ function render(): void {
     </section>`;
 
   field('urlPattern').value = activeGroup.url;
-  field('pageName').value = activeGroup.pageName || state.pageName || '';
-  field('fieldName').value = activeGroup.fieldName || state.fieldName || '输入框';
+  (['pageName', 'fieldName'] as MetaField[]).forEach((name) => {
+    const value = metaValue(name);
+    field(name).value = value;
+    document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"] .meta-value`)!.textContent = value || '未设置';
+    document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"] .meta-edit`)!.append(createElement(Pencil, { 'aria-hidden': 'true' }));
+    document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"] .meta-save`)!.append(createElement(Check, { 'aria-hidden': 'true' }));
+    document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"] .meta-cancel`)!.append(createElement(X, { 'aria-hidden': 'true' }));
+  });
+  bindMetaEditors();
   const target: ElementTarget = state && activeGroup.selector === targetToSelector(state.target)
     ? state.target
     : { kind: 'selector', value: activeGroup.selector };
@@ -659,7 +731,9 @@ async function init(): Promise<void> {
   }
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'session' && changes.editorState) {
-      void refreshCurrentPageState(true);
+      // 铅笔按钮写入新编辑状态时，直接使用 storage 的新值刷新当前侧边栏。
+      // 不再请求页面脚本读取状态，避免请求失败把刚写入的状态清空。
+      void loadState(changes.editorState.newValue);
     }
   });
   document.addEventListener('visibilitychange', () => {

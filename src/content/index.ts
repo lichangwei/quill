@@ -1,5 +1,5 @@
 import { QuillPanel } from '../panel/Panel';
-import type { EditableTarget } from './filler';
+import { isContentEditableTarget, type EditableTarget } from './filler';
 import { generateElementTarget, targetToSelector } from '../actions/storage';
 import { readSelectedElement } from '../page-context/reader';
 import type { ElementPickerResult } from '../types';
@@ -14,7 +14,7 @@ function isValidInput(el: Element): el is TargetInput {
     const type = el.type.toLowerCase();
     return ['text', 'search', 'email', 'url', 'tel', ''].includes(type);
   }
-  return el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
+  return el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && isContentEditableTarget(el));
 }
 
 function createButton(el: TargetInput): HTMLButtonElement {
@@ -64,8 +64,9 @@ function createButton(el: TargetInput): HTMLButtonElement {
 
 function positionButton(btn: HTMLButtonElement, el: TargetInput) {
   const rect = el.getBoundingClientRect();
-  // 垂直居中于输入框右侧
-  btn.style.top = `${rect.top + rect.height / 2 - 12}px`;
+  const isMultiline = el instanceof HTMLTextAreaElement || isContentEditableTarget(el);
+  // 多行编辑区域固定在右上角，单行输入框保持垂直居中。
+  btn.style.top = `${isMultiline ? rect.top + 4 : rect.top + rect.height / 2 - 12}px`;
   btn.style.left = `${rect.right + 4}px`;
 }
 
