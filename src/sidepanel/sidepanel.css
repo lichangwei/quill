@@ -12,10 +12,31 @@ main { padding: 16px; }
 .section-title { margin: 0 0 9px; color: #46414b; font-size: 13px; font-weight: 650; }
 .field { margin-bottom: 11px; }
 .field label { display: block; margin-bottom: 5px; color: #5c5762; font-weight: 600; }
-.field input, .field textarea, .field select { width: 100%; padding: 8px 9px; color: #29272e; background: #fff; border: 1px solid #d5d2da; border-radius: 6px; outline: none; }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: #6344d8; }
+.field input, .field textarea, .field select, .prompt-editor { width: 100%; padding: 8px 9px; color: #29272e; background: #fff; border: 1px solid #d5d2da; border-radius: 6px; outline: none; }
+.field input:focus, .field textarea:focus, .field select:focus, .prompt-editor:focus { border-color: #6344d8; }
 .field textarea { min-height: 130px; resize: vertical; line-height: 1.45; }
 .field input:disabled { color: #77727d; background: #f4f3f5; }
+.prompt-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.prompt-header label { margin: 0; }
+.prompt-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.insert-current { min-height: 29px; padding: 5px 9px; color: #4f4870; background: #f7f5ff; border: 1px solid #cbc4ef; border-radius: 5px; }
+.pick-element { min-height: 29px; padding: 5px 9px; color: #285f9e; background: #f4f8ff; border: 1px solid #b9d3f3; border-radius: 5px; }
+.pick-element:disabled { cursor: wait; opacity: .65; }
+.prompt-editor { position: relative; min-height: 150px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.prompt-drop-caret { position: absolute; z-index: 2; width: 2px; min-height: 18px; background: #1677ff; pointer-events: none; animation: prompt-caret-blink .85s step-end infinite; }
+@keyframes prompt-caret-blink { 50% { opacity: 0; } }
+.prompt-editor:empty::before { color: #aaa5ad; content: attr(data-placeholder); pointer-events: none; }
+.prompt-tag { display: inline-flex; align-items: center; max-width: 100%; margin: 0 2px; padding: 1px 5px 1px 7px; vertical-align: 1px; color: #174f8a; background: #e8f2ff; border: 1px solid #9dc7f4; border-radius: 4px; line-height: 1.45; cursor: grab; }
+.prompt-tag.dragging { opacity: .18; }
+.prompt-tag-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-tag-remove { margin-left: 5px; color: #557899; cursor: pointer; font-weight: 700; }
+.prompt-tag-remove:hover { color: #bd3040; }
+.element-value-tooltip { position: fixed; z-index: 10; max-width: min(360px, calc(100vw - 16px)); max-height: 150px; overflow: auto; padding: 7px 9px; color: #fff; background: #29272e; border-radius: 5px; box-shadow: 0 4px 14px rgba(0,0,0,.2); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.45; pointer-events: none; }
+.picker-status { min-height: 18px; margin-top: 5px; color: #696471; font-size: 12px; line-height: 1.45; }
+.reference-name-form { margin-top: 7px; padding: 8px; background: #f7f7f8; border-left: 3px solid #1677ff; }
+.reference-name-form label { margin-bottom: 7px; }
+.reference-name-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.reference-name-actions button { min-height: 29px; padding: 5px 9px; color: #514c58; background: #fff; border: 1px solid #dedce2; border-radius: 5px; }
 .action-list { display: flex; flex-direction: column; gap: 7px; }
 .action-row { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 7px 6px 10px; border: 1px solid #e0dfe4; border-radius: 6px; }
 .action-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }

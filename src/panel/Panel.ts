@@ -1,5 +1,4 @@
 import * as Types from '../types';
-import { createIcons, icons } from 'lucide';
 import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
@@ -155,7 +154,6 @@ export class QuillPanel {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = PANEL_HTML;
     this.shadow.append(wrapper);
-    createIcons({ icons, root: this.shadow });
     document.body.append(this.host);
     this.bindEvents();
   }
@@ -432,7 +430,11 @@ export class QuillPanel {
     }
     this.showLoading();
     try {
-      const prompt = await resolvePageReferences(action.prompt, readPageContent);
+      const prompt = await resolvePageReferences(action.prompt, (description, selector) => {
+        if (selector) return readPageContent('', selector);
+        const reference = action.pageReferences?.find((item) => item.name === description);
+        return readPageContent(description, reference?.selector);
+      });
       const requestContext = pageReferences.length > 0 && !action.prompt.includes('{content}')
         ? { ...context, content: '' }
         : context;

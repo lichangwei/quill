@@ -1,17 +1,17 @@
 import { QuillPanel } from '../panel/Panel';
-import { buildEditorState, getActionGroups } from '../actions/storage';
-import * as Types from '../types';
+import { generateElementTarget, targetToSelector } from '../actions/storage';
+import { readSelectedElement } from '../page-context/reader';
+import type { ElementPickerResult } from '../types';
 
 const BUTTON_ATTR = 'data-quill-btn';
-const INPUT_SELECTOR = 'input, textarea';
 const panel = new QuillPanel();
 
 type TargetInput = HTMLInputElement | HTMLTextAreaElement;
-let activeTarget: TargetInput | null = null;
 
 function isValidInput(el: Element): el is TargetInput {
   if (el instanceof HTMLInputElement) {
-    return el.type.toLowerCase() === 'text';
+    const type = el.type.toLowerCase();
+    return ['text', 'search', 'email', 'url', 'tel', ''].includes(type);
   }
   return el instanceof HTMLTextAreaElement;
 }
@@ -53,7 +53,6 @@ function createButton(el: TargetInput): HTMLButtonElement {
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    activeTarget = el;
     const rect = el.getBoundingClientRect();
     void panel.showActions(el, rect);
   });
@@ -76,7 +75,6 @@ function attachToInput(el: TargetInput) {
   const btn = createButton(el);
 
   const show = () => {
-    activeTarget = el;
     positionButton(btn, el);
     btn.style.display = 'flex';
   };
@@ -103,38 +101,13 @@ function attachToInput(el: TargetInput) {
 }
 
 function scanInputs(root: Document | Element = document) {
-  root.querySelectorAll<TargetInput>(INPUT_SELECTOR).forEach((el) => {
-    if (isValidInput(el) && !el.hasAttribute(BUTTON_ATTR)) {
+  const selector = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type]), textarea';
+  root.querySelectorAll<TargetInput>(selector).forEach((el) => {
+    if (!el.hasAttribute(BUTTON_ATTR)) {
       attachToInput(el);
     }
   });
 }
-
-function getCurrentTarget(): TargetInput | null {
-  if (document.activeElement && isValidInput(document.activeElement)) {
-    return document.activeElement;
-  }
-  if (activeTarget?.isConnected) return activeTarget;
-  return Array.from(document.querySelectorAll(INPUT_SELECTOR)).find(isValidInput) || null;
-}
-
-chrome.runtime.onMessage.addListener((message: { type?: string }, _sender, sendResponse) => {
-  if (message.type !== 'GET_CURRENT_EDITOR_STATE') return;
-  const target = getCurrentTarget();
-  if (!target) {
-    sendResponse({ state: null });
-    return;
-  }
-  void getActionGroups()
-    .then((groups) => {
-      const state: Types.EditorState = buildEditorState(groups, location.href, target);
-      sendResponse({ state });
-    })
-    .catch((error: unknown) => {
-      sendResponse({ error: error instanceof Error ? error.message : String(error) });
-    });
-  return true;
-});
 
 // 初始扫描
 scanInputs();
@@ -155,3 +128,188 @@ const observer = new MutationObserver((mutations) => {
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
+
+let cancelActivePicker: (() => void) | null = null;
+
+function pickerElementName(element: Element): string {
+  const ariaLabel = element.getAttribute('aria-label')?.trim();
+  if (ariaLabel) return ariaLabel;
+  if (element.id) {
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(element.id)}"]`);
+    const labelText = label?.textContent?.trim();
+    if (labelText) return labelText;
+  }
+  const closestLabel = element.closest('label')?.textContent?.trim();
+  if (closestLabel) return closestLabel;
+  const formItem = element.closest('.el-form-item, .ant-form-item, .form-item, [class*="form-item"]');
+  const formItemLabel = formItem?.querySelector('label, .el-form-item__label, .ant-form-item-label')?.textContent?.trim();
+  if (formItemLabel) return formItemLabel.replace(/[：:*]\s*$/, '').trim();
+  const placeholder = element.getAttribute('placeholder')?.trim();
+  if (placeholder) return placeholder;
+  const name = element.getAttribute('name')?.trim();
+  if (name) return name;
+  const heading = element.querySelector('h1, h2, h3, legend')?.textContent?.trim();
+  if (heading) return heading;
+  return element.tagName.toLowerCase();
+}
+
+function pickerElementValue(element: Element): string {
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+    return element.value.trim();
+  }
+  if (element instanceof HTMLIFrameElement) {
+    try {
+      return (element.contentDocument?.body.innerText || '').trim();
+    } catch {
+      return '';
+    }
+  }
+  if (element instanceof HTMLElement) return (element.innerText || element.textContent || '').trim();
+  return (element.textContent || '').trim();
+}
+
+function pickerTargetAt(event: MouseEvent): Element | null {
+  const editableSelector = 'input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="textbox"]';
+  const eventTarget = event.composedPath().find((node): node is Element => node instanceof Element);
+  const editableTarget = eventTarget?.closest(editableSelector);
+  if (editableTarget) return editableTarget;
+
+  // 部分组件库会在真实输入框上方覆盖包装节点，优先选择指针下方的实际编辑控件。
+  for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
+    if (element.matches(editableSelector)) return element;
+    const nestedEditable = element.querySelector(editableSelector);
+    if (nestedEditable) {
+      const rect = nestedEditable.getBoundingClientRect();
+      if (event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        return nestedEditable;
+      }
+    }
+  }
+  return eventTarget || null;
+}
+
+function pageSelectorFor(element: Element): string {
+  const parts: string[] = [];
+  let current = element;
+  while (current.getRootNode() instanceof ShadowRoot) {
+    parts.unshift(targetToSelector(generateElementTarget(current)));
+    current = (current.getRootNode() as ShadowRoot).host;
+  }
+  const selector = targetToSelector(generateElementTarget(current));
+  return parts.length ? [selector, ...parts].join(' >>> ') : selector;
+}
+
+function startElementPicker(): Promise<ElementPickerResult> {
+  cancelActivePicker?.();
+  return new Promise((resolve, reject) => {
+    const highlight = document.createElement('div');
+    const tooltip = document.createElement('div');
+    const pickerStyle = document.createElement('style');
+    pickerStyle.textContent = '* { cursor: crosshair !important; }';
+    pickerStyle.setAttribute('data-quill-picker', 'true');
+    highlight.setAttribute('data-quill-picker', 'true');
+    tooltip.setAttribute('data-quill-picker', 'true');
+    Object.assign(highlight.style, {
+      position: 'fixed',
+      zIndex: '2147483645',
+      display: 'none',
+      pointerEvents: 'none',
+      border: '2px solid #1677ff',
+      background: 'rgba(22, 119, 255, 0.12)',
+      boxSizing: 'border-box',
+    });
+    Object.assign(tooltip.style, {
+      position: 'fixed',
+      zIndex: '2147483646',
+      display: 'none',
+      maxWidth: 'min(420px, calc(100vw - 16px))',
+      padding: '5px 8px',
+      pointerEvents: 'none',
+      color: '#fff',
+      background: '#1677ff',
+      borderRadius: '4px',
+      font: '12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    });
+    document.documentElement.append(pickerStyle, highlight, tooltip);
+
+    let hovered: Element | null = null;
+    let settled = false;
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMouseMove, true);
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      highlight.remove();
+      tooltip.remove();
+      pickerStyle.remove();
+      if (cancelActivePicker === cancel) cancelActivePicker = null;
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('已取消选择页面元素'));
+    };
+    const onMouseMove = (event: MouseEvent) => {
+      const target = pickerTargetAt(event);
+      if (!target || target.closest('[data-quill-picker], button[data-quill-btn], #quill-panel')) return;
+      hovered = target;
+      const rect = target.getBoundingClientRect();
+      Object.assign(highlight.style, {
+        display: 'block',
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+      });
+      const value = pickerElementValue(target);
+      tooltip.textContent = value || '（空）';
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - tooltip.offsetWidth - 8))}px`;
+      tooltip.style.top = `${rect.top > 34 ? rect.top - 30 : Math.min(innerHeight - 30, rect.bottom + 4)}px`;
+    };
+    const onClick = (event: MouseEvent) => {
+      if (!hovered) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const selector = pageSelectorFor(hovered);
+      const result: ElementPickerResult = {
+        name: pickerElementName(hovered),
+        selector,
+        tagName: hovered.tagName.toLowerCase(),
+      };
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancel();
+      }
+    };
+
+    cancelActivePicker = cancel;
+    document.addEventListener('mousemove', onMouseMove, true);
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKeyDown, true);
+  });
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'READ_SELECTED_ELEMENT') {
+    const selector = typeof message.selector === 'string' ? message.selector : '';
+    const result = selector ? readSelectedElement(selector) : { found: false, value: '' };
+    sendResponse(result);
+    return;
+  }
+  if (message.type !== 'START_ELEMENT_PICKER') return;
+  startElementPicker()
+    .then((result) => sendResponse({ result }))
+    .catch((error) => sendResponse({ error: error instanceof Error ? error.message : String(error) }));
+  return true;
+});
