@@ -1,5 +1,11 @@
-import type { EnhanceRequest, EnhanceResponse, PageFieldRequest, Settings } from '../types';
+import type { EditorState, EnhanceRequest, EnhanceResponse, PageFieldRequest, Settings } from '../types';
 import { PAGE_FIELD_NOT_FOUND, buildPageFieldPrompt, buildPrompt } from './prompt';
+
+if (chrome.sidePanel) {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => {
+    console.error('[Quill] 配置工具栏打开侧边栏失败:', error);
+  });
+}
 
 const LEGACY_POLISH_PROMPT = '请润色以下文字，使其更专业流畅，保持原意，只返回结果，不要任何解释：\n\n{content}';
 
@@ -66,6 +72,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'OPEN_OPTIONS') {
     chrome.runtime.openOptionsPage();
     return;
+  }
+  if (msg.type === 'OPEN_EDITOR_SIDE_PANEL') {
+    const state = msg.payload as EditorState;
+    const tabId = _sender.tab?.id;
+    (async () => {
+      try {
+        if (!chrome.sidePanel || tabId === undefined) throw new Error('无法获取当前页面标签');
+        await chrome.storage.session.set({ editorState: state });
+        await chrome.sidePanel.setOptions({
+          tabId,
+          path: 'src/sidepanel/sidepanel.html',
+          enabled: true,
+        });
+        sendResponse({ requiresToolbarClick: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[Quill] 打开 Chrome 侧边栏失败: ${message}`);
+        sendResponse({ error: message });
+      }
+    })();
+    return true;
   }
   if (msg.type === 'ENHANCE_TEXT') {
     const req = msg.payload as EnhanceRequest;

@@ -1,0 +1,29 @@
+* { box-sizing: border-box; letter-spacing: 0; }
+:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #29272e; background: #fff; }
+body { margin: 0; min-width: 280px; font-size: 13px; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+.topbar { position: sticky; top: 0; z-index: 1; padding: 16px 18px 14px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; }
+.topbar h1 { margin: 0; color: #6344d8; font-size: 18px; }
+.topbar p { margin: 4px 0 0; color: #77727d; font-size: 12px; }
+main { padding: 16px; }
+.section { margin-bottom: 18px; }
+.section-title { margin: 0 0 9px; color: #46414b; font-size: 13px; font-weight: 650; }
+.field { margin-bottom: 11px; }
+.field label { display: block; margin-bottom: 5px; color: #5c5762; font-weight: 600; }
+.field input, .field textarea, .field select { width: 100%; padding: 8px 9px; color: #29272e; background: #fff; border: 1px solid #d5d2da; border-radius: 6px; outline: none; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: #6344d8; }
+.field textarea { min-height: 130px; resize: vertical; line-height: 1.45; }
+.field input:disabled { color: #77727d; background: #f4f3f5; }
+.action-list { display: flex; flex-direction: column; gap: 7px; }
+.action-row { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 7px 6px 10px; border: 1px solid #e0dfe4; border-radius: 6px; }
+.action-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.action-row button, .toolbar button, .form-actions button { min-height: 31px; padding: 6px 10px; color: #514c58; background: #fff; border: 1px solid #dedce2; border-radius: 5px; }
+.action-row .delete { color: #bd3040; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.primary { color: #fff !important; background: #6344d8 !important; border-color: #6344d8 !important; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.warning { margin-top: 8px; padding: 8px; color: #8c5a00; background: #fff7df; border: 1px solid #edd28a; border-radius: 6px; }
+.error { color: #c22f3d; line-height: 1.45; }
+.empty { color: #77727d; }

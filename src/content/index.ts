@@ -54,13 +54,6 @@ function createButton(el: TargetInput): HTMLButtonElement {
     void panel.showActions(el, rect);
   });
 
-  btn.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = el.getBoundingClientRect();
-    void panel.showEditor(el, rect);
-  });
-
   document.body.appendChild(btn);
   return btn;
 }

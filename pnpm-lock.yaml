@@ -7,9 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@page-agent/page-controller':
+        specifier: ^1.12.2
+        version: 1.12.2
     devDependencies:
       '@crxjs/vite-plugin':
-        specifier: ^2.0.0
+        specifier: ^2.7.1
         version: 2.7.1(vite@8.2.0)
       '@types/chrome':
         specifier: ^0.1.42
@@ -99,6 +103,9 @@ packages:
 
   '@oxc-project/types@0.142.0':
     resolution: {integrity: sha512-7W+2q5AKQVU36fkaryontrHn3YDt1RyUYXatw9i5H8ocYe2sPKSFB6eS8WNPeRKiN1qAWWZUPm7gwFzJGrccqQ==}
+
+  '@page-agent/page-controller@1.12.2':
+    resolution: {integrity: sha512-faiFb/lXMJJ6vDnxZ5Pdo/YE75X9FTGCDGbQuDbYEPOsoWo+pB1xTdfAkjDEkusbkZJdh8+mQoGTJ9yLOJkUkA==}
 
   '@rolldown/binding-android-arm64@1.2.2':
     resolution: {integrity: sha512-l7x215OGvo1s52JWmR8U/DAVzEDWBCIbTm28aeJV/WDTSHgcKXaZTuBT0hJMs5NggilfJTW3clZVvd24yfKJxA==}
@@ -257,6 +264,9 @@ packages:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  ai-motion@0.4.8:
+    resolution: {integrity: sha512-9nQVjf8lrYQWSW0sZdb9bES4x8Ei1w9C0S62po2KvRbMjslmjm0WMeszyW771SEauDnu4YGWqurLZ/gCkCTosQ==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -787,6 +797,10 @@ snapshots:
 
   '@oxc-project/types@0.142.0': {}
 
+  '@page-agent/page-controller@1.12.2':
+    dependencies:
+      ai-motion: 0.4.8
+
   '@rolldown/binding-android-arm64@1.2.2':
     optional: true
 
@@ -903,6 +917,8 @@ snapshots:
       acorn: 8.18.0
 
   acorn@8.18.0: {}
+
+  ai-motion@0.4.8: {}
 
   assertion-error@2.0.1: {}
 

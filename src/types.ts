@@ -46,3 +46,10 @@ export interface PageFieldRequest {
 }
 
 export type PageFieldResponse = EnhanceResponse;
+
+export interface EditorState {
+  url: string;
+  selector: string;
+  target: ElementTarget;
+  group: StoredActionGroup | null;
+}

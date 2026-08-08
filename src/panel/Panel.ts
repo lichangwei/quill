@@ -1,4 +1,4 @@
-import type { ElementTarget, EnhanceRequest, EnhanceResponse, StoredAction, StoredActionGroup } from '../types';
+import type { EditorState, ElementTarget, EnhanceRequest, EnhanceResponse, StoredAction, StoredActionGroup } from '../types';
 import { getFieldContent, getFieldLabel, fillField } from '../content/filler';
 import {
   DEFAULT_POLISH_PROMPT,
@@ -24,7 +24,10 @@ const PANEL_HTML = `
 <div id="quill-panel-inner">
   <div class="quill-header">
     <span class="quill-title">✦ Quill</span>
-    <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
+    <span class="quill-header-actions">
+      <button type="button" class="quill-icon-button quill-edit" title="编辑动作" aria-label="编辑动作">✎</button>
+      <button type="button" class="quill-icon-button quill-close" title="关闭" aria-label="关闭">×</button>
+    </span>
   </div>
   <div class="quill-action-list"></div>
   <div class="quill-result" hidden>
@@ -79,13 +82,14 @@ button { cursor: pointer; }
   border: 1px solid #dddce2; border-radius: 8px; box-shadow: 0 8px 28px rgba(25,20,35,.18);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px;
 }
-#quill-panel-inner.editor-mode { width: min(440px, calc(100vw - 16px)); max-height: min(680px, calc(100vh - 16px)); overflow-y: auto; }
+#quill-panel-inner.editor-mode { width: 100%; height: 100%; max-height: none; overflow-y: auto; border-radius: 8px 0 0 8px; }
 .quill-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #f7f7f8; border-bottom: 1px solid #e8e8e8; }
+.quill-header-actions { display: flex; align-items: center; gap: 3px; }
 .quill-title { color: #6344d8; font-weight: 650; }
 .quill-icon-button { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: #76727d; font-size: 18px; line-height: 24px; }
 .quill-icon-button:hover { color: #29272e; }
-.quill-action-list { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
-.quill-action-button { width: 100%; min-height: 34px; padding: 7px 10px; overflow-wrap: anywhere; text-align: left; color: #38343e; background: #fafafa; border: 1px solid #dfdee4; border-radius: 6px; }
+.quill-action-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
+.quill-action-button { min-width: 0; max-width: 100%; flex: 0 1 auto; min-height: 34px; padding: 7px 10px; overflow-wrap: anywhere; text-align: center; color: #38343e; background: #fafafa; border: 1px solid #dfdee4; border-radius: 6px; }
 .quill-action-button:hover { color: #fff; background: #6344d8; border-color: #6344d8; }
 .quill-result, .quill-error, .quill-editor { padding: 12px; }
 .quill-result-text { max-height: 160px; overflow-y: auto; padding: 9px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; background: #f7f7f8; border-radius: 6px; }
@@ -145,6 +149,9 @@ export class QuillPanel {
 
   private bindEvents(): void {
     this.shadow.querySelector('.quill-close')!.addEventListener('click', () => this.hide());
+    this.shadow.querySelector('.quill-edit')!.addEventListener('click', () => {
+      if (this.targetEl) void this.openEditorSidePanel();
+    });
     this.shadow.querySelector('.quill-cancel')!.addEventListener('click', () => this.hide());
     this.shadow.querySelector('.quill-accept')!.addEventListener('click', () => {
       if (this.targetEl && this.lastResult) fillField(this.targetEl, this.lastResult);
@@ -187,10 +194,10 @@ export class QuillPanel {
     }
   }
 
-  async showEditor(target: TargetInput, anchorRect: DOMRect): Promise<void> {
+  async showEditor(target: TargetInput): Promise<void> {
     this.prepare(target, true);
     this.generatedTarget = generateElementTarget(target);
-    this.showAt(anchorRect, 440);
+    this.showEditorSidePanel();
     try {
       const groups = await getActionGroups();
       const matchedGroup = getMatchingActionGroup(groups, location.href, target);
@@ -204,6 +211,36 @@ export class QuillPanel {
       this.formField('targetKind').value = displayTarget.kind;
       this.formField('targetValue').value = displayTarget.value;
       await this.renderBoundActions();
+    } catch (error) {
+      this.showError(this.errorMessage(error));
+    }
+  }
+
+  private async openEditorSidePanel(): Promise<void> {
+    if (!this.targetEl) return;
+    try {
+      const generatedTarget = generateElementTarget(this.targetEl);
+      const groups = await getActionGroups();
+      const matchedGroup = getMatchingActionGroup(groups, location.href, this.targetEl);
+      const state: EditorState = {
+        url: matchedGroup?.url || location.href,
+        selector: matchedGroup?.selector || targetToSelector(generatedTarget),
+        target: generatedTarget,
+        group: matchedGroup,
+      };
+      chrome.runtime.sendMessage({ type: 'OPEN_EDITOR_SIDE_PANEL', payload: state }, (response?: { error?: string; requiresToolbarClick?: boolean }) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Quill] 打开 Chrome 侧边栏失败:', chrome.runtime.lastError.message);
+          this.showError(chrome.runtime.lastError.message || '无法打开侧边栏');
+        } else if (response?.error) {
+          console.error('[Quill] 打开 Chrome 侧边栏失败:', response.error);
+          this.showError(response.error);
+        } else if (response?.requiresToolbarClick) {
+          this.showError('编辑内容已准备好，请点击浏览器工具栏中的 Quill 图标打开侧边栏');
+        } else {
+          this.hide();
+        }
+      });
     } catch (error) {
       this.showError(this.errorMessage(error));
     }
@@ -445,6 +482,9 @@ export class QuillPanel {
 
   private showAt(anchorRect: DOMRect, panelWidth: number): void {
     this.host.style.display = 'block';
+    this.host.style.right = 'auto';
+    this.host.style.width = 'auto';
+    this.host.style.height = 'auto';
     const margin = 6;
     let left = anchorRect.right + margin;
     let top = anchorRect.top;
@@ -456,6 +496,15 @@ export class QuillPanel {
     if (top + maxHeight > window.innerHeight) top = Math.max(8, window.innerHeight - maxHeight - 8);
     this.host.style.left = `${Math.max(8, left)}px`;
     this.host.style.top = `${Math.max(8, top)}px`;
+  }
+
+  private showEditorSidePanel(): void {
+    this.host.style.display = 'block';
+    this.host.style.left = 'auto';
+    this.host.style.right = '0';
+    this.host.style.top = '0';
+    this.host.style.width = 'min(440px, 100vw)';
+    this.host.style.height = '100vh';
   }
 
   private errorMessage(error: unknown): string {

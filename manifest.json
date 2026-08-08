@@ -5,7 +5,8 @@
   "description": "AI-powered text enhancement for any input field",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -25,8 +26,11 @@
     "page": "src/options/options.html",
     "open_in_tab": true
   },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
   "action": {
-    "default_title": "Quill Settings",
+    "default_title": "打开 Quill 侧边栏",
     "default_icon": {
       "16": "public/icons/icon16.png",
       "48": "public/icons/icon48.png",
