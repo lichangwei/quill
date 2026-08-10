@@ -12,15 +12,20 @@ import {
   POLISH_ID,
   deleteAction,
   getActionGroups,
+  getPageActionGroups,
   mergePolishAction,
   resetPolishAction,
   saveActionGroup,
   savePolishAction,
+  selectorToTarget,
   targetToSelector,
 } from '../actions/storage';
 
 
 const app = document.querySelector<HTMLElement>('#app')!;
+let view: 'list' | 'edit' = 'list';
+// ✦ 打开时通过 storage.session 传入的深链状态，消费一次以在 tab 事件竞态中收敛到编辑页。
+let pendingDeepLink: EditorState | null = null;
 let state: EditorState | null = null;
 let activeGroup: StoredActionGroup | null = null;
 let editingAction: StoredAction | null = null;
@@ -109,12 +114,90 @@ function button(text: string, className: string, onClick: () => void): HTMLButto
   return element;
 }
 
-function render(): void {
-  if (!state || !activeGroup) {
-    app.innerHTML = '<p class="empty">请从页面上的嘴替按钮打开动作编辑。</p>';
+function groupDisplayName(group: StoredActionGroup): string {
+  return (group.fieldName || group.pageName || group.selector || '未命名元素').trim();
+}
+
+function renderList(groups: StoredActionGroup[]): void {
+  view = 'list';
+  if (groups.length === 0) {
+    app.innerHTML = '<p class="empty">当前页面还没有配置动作元素。在输入框上点击 ✦ 按钮即可添加。</p>';
     return;
   }
   app.innerHTML = `
+    <section class="section">
+      <div class="toolbar"><h2 class="section-title">当前页面的元素</h2></div>
+      <div class="page-element-list"></div>
+    </section>`;
+  const container = app.querySelector<HTMLElement>('.page-element-list')!;
+  container.replaceChildren(...groups.map((group) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'page-element-row';
+    const name = document.createElement('span');
+    name.className = 'page-element-name';
+    name.textContent = groupDisplayName(group);
+    const ops = group.actions.filter((action) => action.id !== POLISH_ID).map((action) => action.name);
+    const meta = document.createElement('span');
+    meta.className = 'page-element-ops';
+    meta.textContent = ops.length ? ops.join('、') : '仅默认动作';
+    row.append(name, meta);
+    row.addEventListener('click', () => openGroupEditor(group));
+    return row;
+  }));
+}
+
+/**
+ * 查询当前活动标签页 URL，展示该页已配置的元素列表。
+ * 若存在指向当前标签页的 ✦ 深链（pendingDeepLink），则优先打开对应元素的编辑页。
+ */
+async function showListForCurrentTab(): Promise<void> {
+  const requestId = ++refreshRequestId;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const groups = await getActionGroups();
+  if (requestId !== refreshRequestId) return;
+  if (pendingDeepLink && pendingDeepLink.tabId === tab?.id) {
+    const deepLink = pendingDeepLink;
+    pendingDeepLink = null;
+    await loadState(deepLink);
+    return;
+  }
+  pendingDeepLink = null;
+  state = null;
+  activeGroup = null;
+  editingAction = null;
+  editingPageReferences = [];
+  pendingPickerResult = null;
+  promptInsertionRange = null;
+  renderList(getPageActionGroups(groups, tab?.url ?? ''));
+}
+
+/**
+ * 从列表进入单元素编辑器。合成完整 EditorState，使编辑视图内所有 state 读取保持有效；
+ * 故意不带 tabId，让 picker / 取值走当前活动标签页（即被跟随的页面）。
+ */
+function openGroupEditor(group: StoredActionGroup): void {
+  activeGroup = { ...group, actions: group.actions.map((action) => ({ ...action })) };
+  state = {
+    url: group.url,
+    selector: group.selector,
+    target: selectorToTarget(group.selector),
+    group: activeGroup,
+    ...(group.pageName ? { pageName: group.pageName } : {}),
+    ...(group.fieldName ? { fieldName: group.fieldName } : {}),
+  };
+  view = 'edit';
+  editingAction = null;
+  render();
+}
+
+function render(): void {
+  if (!state || !activeGroup) {
+    void showListForCurrentTab();
+    return;
+  }
+  app.innerHTML = `
+    <div class="editor-toolbar"><button type="button" class="back-button">← 返回列表</button></div>
     <section class="section metadata-section">
       <div class="meta-status" aria-live="polite"></div>
       <div class="meta-row" data-meta="pageName">
@@ -163,6 +246,11 @@ function render(): void {
     document.querySelector<HTMLElement>(`.meta-row[data-meta="${name}"] .meta-cancel`)!.append(createElement(X, { 'aria-hidden': 'true' }));
   });
   bindMetaEditors();
+  document.querySelector<HTMLButtonElement>('.back-button')!.addEventListener('click', () => {
+    // 清除 ✦ 深链状态，让列表成为明确主页，避免重开时又跳回编辑页。
+    void chrome.storage.session.remove('editorState');
+    void showListForCurrentTab();
+  });
   const target: ElementTarget = state && activeGroup.selector === targetToSelector(state.target)
     ? state.target
     : { kind: 'selector', value: activeGroup.selector };
@@ -690,9 +778,10 @@ async function resetPolish(): Promise<void> {
 async function loadState(value: unknown): Promise<void> {
   state = value as EditorState | undefined || null;
   if (!state) {
-    render();
+    void showListForCurrentTab();
     return;
   }
+  view = 'edit';
   activeGroup = state.group
     ? { ...state.group, actions: state.group.actions.map((action) => ({ ...action })) }
     : {
@@ -712,65 +801,35 @@ async function loadState(value: unknown): Promise<void> {
   }
 }
 
-async function requestCurrentPageState(): Promise<EditorState | null | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tabId = tab?.id;
-  if (tabId === undefined) return undefined;
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: 'GET_CURRENT_EDITOR_STATE' },
-      (response?: { state?: EditorState | null; error?: string }) => {
-        if (chrome.runtime.lastError || response?.error) {
-          resolve(undefined);
-          return;
-        }
-        resolve(response?.state ?? null);
-      },
-    );
-  });
-}
-
-async function loadStateFromSession(): Promise<void> {
-  const result = await chrome.storage.session.get('editorState');
-  await loadState(result.editorState);
-}
-
-async function refreshCurrentPageState(clearOnFailure = false): Promise<boolean> {
-  const requestId = ++refreshRequestId;
-  const currentState = await requestCurrentPageState();
-  if (requestId !== refreshRequestId) return false;
-  if (currentState === undefined) {
-    // 内容脚本未实现该消息（或页面尚未就绪）时不能直接清空面板，
-    // 否则新开标签页加载完成（tabs.onUpdated）等事件会把刚设置好的编辑状态清掉。
-    // 回退到已保存的会话状态，保证侧边栏始终展示最近一次打开的具体动作。
-    if (clearOnFailure) await loadStateFromSession();
-    return false;
-  }
-  await loadState(currentState);
-  return true;
-}
-
 async function init(): Promise<void> {
-  if (!await refreshCurrentPageState()) {
-    await loadStateFromSession();
+  // ✦ 在当前标签页打开时保留深链；否则以列表为主页跟随当前标签页。
+  const { editorState } = await chrome.storage.session.get('editorState');
+  const stored = editorState as EditorState | undefined;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (stored && stored.tabId !== undefined && stored.tabId === tab?.id) {
+    await loadState(stored);
+  } else {
+    await showListForCurrentTab();
   }
+
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'session' && changes.editorState) {
-      // 直接使用新值渲染，避免依赖当前激活标签页（可能与目标标签页不同）的状态回传。
-      void loadState(changes.editorState.newValue);
-    }
+    if (areaName !== 'session' || !changes.editorState) return;
+    const newValue = changes.editorState.newValue as EditorState | undefined;
+    if (!newValue) return;
+    // ✦ 打开：记录深链以在 tab 事件竞态中收敛到编辑页，并立即切到编辑视图。
+    pendingDeepLink = newValue;
+    void loadState(newValue);
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void refreshCurrentPageState();
+    if (document.visibilityState === 'visible' && view === 'list') void showListForCurrentTab();
   });
   chrome.tabs.onActivated.addListener(() => {
-    void refreshCurrentPageState(true);
+    void showListForCurrentTab();
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (changeInfo.status !== 'complete') return;
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab?.id === tabId) void refreshCurrentPageState(true);
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([activeTab]) => {
+      if (activeTab?.id === tabId) void showListForCurrentTab();
     });
   });
 }

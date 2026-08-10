@@ -70,4 +70,13 @@ main { padding: 16px; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .warning { margin-top: 8px; padding: 8px; color: #8c5a00; background: #fff7df; border: 1px solid #edd28a; border-radius: 6px; }
 .error { color: #c22f3d; line-height: 1.45; }
-.empty { color: #77727d; }
+.empty { color: #77727d; line-height: 1.5; }
+.editor-toolbar { margin-bottom: 10px; }
+.back-button { min-height: 29px; padding: 5px 10px; color: #514c58; background: #fff; border: 1px solid #dedce2; border-radius: 5px; cursor: pointer; }
+.back-button:hover { background: #f4f3f7; }
+.page-element-list { display: flex; flex-direction: column; gap: 0; border-top: 1px solid #e0dfe4; border-bottom: 1px solid #e0dfe4; }
+.page-element-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; min-height: 44px; padding: 9px 6px; text-align: left; background: #fff; border: 0; border-bottom: 1px solid #e0dfe4; cursor: pointer; }
+.page-element-row:last-child { border-bottom: 0; }
+.page-element-row:hover { background: #f4f3f7; }
+.page-element-name { color: #35303c; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.page-element-ops { color: #77727d; font-size: 12px; overflow-wrap: anywhere; }

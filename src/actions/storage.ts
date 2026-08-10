@@ -260,6 +260,14 @@ export function getMatchingActionGroup(
   return groups.find((group) => group.selector && groupMatches(group, url, el)) || null;
 }
 
+/**
+ * 返回当前页面（按 URL 规则）已配置的元素分组，用于侧边栏列表视图。
+ * 排除全局润色组（selector 为空），仅按 URL 匹配，不依赖具体 DOM 元素。
+ */
+export function getPageActionGroups(groups: StoredActionGroup[], url: string): StoredActionGroup[] {
+  return groups.filter((group) => group.selector && urlMatches(group.url, url));
+}
+
 export function getMatchingActions(
   groups: StoredActionGroup[],
   url: string,

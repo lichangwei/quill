@@ -9,6 +9,7 @@ import {
   elementMatches,
   generateElementTarget,
   getMatchingActions,
+  getPageActionGroups,
   mergePolishAction,
   normalizeActionGroups,
   urlMatches,
@@ -90,6 +91,35 @@ describe('动作合并与匹配', () => {
       target: { kind: 'id', value: 'editor' },
       group,
     });
+  });
+});
+
+describe('getPageActionGroups', () => {
+  const pageGroup: Types.StoredActionGroup = {
+    url: 'https://example.com/*', selector: '#editor', actions: [{ id: 'a', name: '翻译', prompt: 't' }],
+  };
+  const otherGroup: Types.StoredActionGroup = {
+    url: 'https://other.com/*', selector: '#input', actions: [{ id: 'b', name: '缩写', prompt: 's' }],
+  };
+  const polishGroup: Types.StoredActionGroup = {
+    url: '', selector: '', actions: [{ id: POLISH_ID, name: '润色', prompt: 'p {content}' }],
+  };
+
+  it('按 URL 规则返回当前页面的元素分组', () => {
+    expect(getPageActionGroups([pageGroup, otherGroup], 'https://example.com/page')).toEqual([pageGroup]);
+  });
+
+  it('排除全局润色组（selector 为空）', () => {
+    expect(getPageActionGroups([polishGroup, pageGroup], 'https://example.com/page')).toEqual([pageGroup]);
+  });
+
+  it('URL 不匹配时返回空', () => {
+    expect(getPageActionGroups([pageGroup], 'https://nope.com/page')).toEqual([]);
+  });
+
+  it('selector 非空但 URL 规则为空时匹配任意页面', () => {
+    const anyUrl: Types.StoredActionGroup = { url: '', selector: '#x', actions: [] };
+    expect(getPageActionGroups([anyUrl], 'https://whatever.com/')).toEqual([anyUrl]);
   });
 });
 
