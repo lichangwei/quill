@@ -101,11 +101,29 @@ describe('元素目标', () => {
     expect(generateElementTarget(document.querySelector('textarea')!)).toEqual({ kind: 'id', value: 'message' });
   });
 
-  it('使用稳定属性组合获取唯一选择器', () => {
+  it('用稳定属性生成唯一且指向正确元素的选择器', () => {
     document.body.innerHTML = '<input name="query" type="text"><input name="query" type="search">';
-    expect(generateElementTarget(document.querySelector('input[type="search"]')!)).toEqual({
-      kind: 'selector', value: 'input[name="query"][type="search"]',
-    });
+    const searchInput = document.querySelector('input[type="search"]')!;
+    const target = generateElementTarget(searchInput);
+    expect(target.kind).toBe('selector');
+    expect(document.querySelectorAll(target.value)).toHaveLength(1);
+    expect(document.querySelector(target.value)).toBe(searchInput);
+    // 应基于语义属性，而非退化为 nth-of-type 位置路径。
+    expect(target.value).not.toContain('nth-of-type');
+  });
+
+  it('优先使用 data-testid 而非易变 class', () => {
+    document.body.innerHTML = '<button class="css-1a2b3c" data-testid="submit">提交</button>';
+    const target = generateElementTarget(document.querySelector('button')!);
+    expect(target.value).toContain('data-testid="submit"');
+    expect(target.value).not.toContain('css-1a2b3c');
+  });
+
+  it('忽略框架自动生成的 id', () => {
+    document.body.innerHTML = '<div id="ember123"><input name="email"></div>';
+    const target = generateElementTarget(document.querySelector('input')!);
+    expect(target.value).not.toContain('ember123');
+    expect(document.querySelector(target.value)).toBe(document.querySelector('input'));
   });
 
   it('稳定属性不唯一时生成父级路径', () => {

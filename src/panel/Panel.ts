@@ -447,7 +447,7 @@ export class QuillPanel {
       const prompt = await resolvePageReferences(action.prompt, (description, selector) => {
         if (selector) return readPageContent('', selector);
         const reference = action.pageReferences?.find((item) => item.name === description);
-        return readPageContent(description, reference?.selector);
+        return readPageContent(description, reference?.selector, reference?.fallback);
       });
       const requestContext = pageReferences.length > 0 && !action.prompt.includes('{content}')
         ? { ...context, content: '' }

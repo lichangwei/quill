@@ -2,6 +2,7 @@ import { QuillPanel } from '../panel/Panel';
 import { isContentEditableTarget, type EditableTarget } from './filler';
 import { generateElementTarget, targetToSelector } from '../actions/storage';
 import { readSelectedElement } from '../page-context/reader';
+import { captureFingerprint } from '../page-context/fingerprint';
 import type { ElementPickerResult } from '../types';
 
 const BUTTON_ATTR = 'data-quill-btn';
@@ -279,10 +280,12 @@ function startElementPicker(): Promise<ElementPickerResult> {
       event.preventDefault();
       event.stopImmediatePropagation();
       const selector = pageSelectorFor(hovered);
+      const fallback = captureFingerprint(hovered);
       const result: ElementPickerResult = {
         name: pickerElementName(hovered),
         selector,
         tagName: hovered.tagName.toLowerCase(),
+        ...(fallback ? { fallback } : {}),
       };
       settled = true;
       cleanup();
@@ -305,7 +308,8 @@ function startElementPicker(): Promise<ElementPickerResult> {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'READ_SELECTED_ELEMENT') {
     const selector = typeof message.selector === 'string' ? message.selector : '';
-    const result = selector ? readSelectedElement(selector) : { found: false, value: '' };
+    const fallback = message.fallback && typeof message.fallback === 'object' ? message.fallback : undefined;
+    const result = selector ? readSelectedElement(selector, fallback) : { found: false, value: '' };
     sendResponse(result);
     return;
   }

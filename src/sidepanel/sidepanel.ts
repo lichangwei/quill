@@ -288,8 +288,12 @@ function createPromptTag(reference: PageElementReference, token = selectorToken(
   tag.className = 'prompt-tag';
   tag.contentEditable = 'false';
   tag.draggable = true;
-  if (token === '{content}') tag.dataset.token = token;
-  else tag.dataset.selector = reference.selector;
+  if (token === '{content}') {
+    tag.dataset.token = token;
+  } else {
+    tag.dataset.selector = reference.selector;
+    if (reference.fallback) tag.dataset.fallback = JSON.stringify(reference.fallback);
+  }
   const label = document.createElement('span');
   label.className = 'prompt-tag-label';
   label.textContent = reference.name;
@@ -467,9 +471,9 @@ function hideValueTooltip(): void {
   if (valueTooltip) valueTooltip.hidden = true;
 }
 
-function readElementValue(tabId: number, selector: string): Promise<{ found: boolean; value: string }> {
+function readElementValue(tabId: number, selector: string, fallback?: unknown): Promise<{ found: boolean; value: string }> {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: 'READ_SELECTED_ELEMENT', selector }, (response?: { found?: boolean; value?: string }) => {
+    chrome.tabs.sendMessage(tabId, { type: 'READ_SELECTED_ELEMENT', selector, fallback }, (response?: { found?: boolean; value?: string }) => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message || '无法读取左侧页面元素'));
       } else {
@@ -484,12 +488,18 @@ function handlePromptTagMouseOver(event: MouseEvent): void {
   if (!tag || (event.relatedTarget instanceof Node && tag.contains(event.relatedTarget))) return;
   const selector = tag.dataset.selector;
   if (!selector) return;
+  let fallback: unknown;
+  try {
+    fallback = tag.dataset.fallback ? JSON.parse(tag.dataset.fallback) : undefined;
+  } catch {
+    fallback = undefined;
+  }
   const tooltip = ensureValueTooltip();
   const requestId = ++valueRequestId;
   tooltip.textContent = '正在读取左侧页面元素...';
   tooltip.hidden = false;
   positionValueTooltip(event);
-  void getEditorTabId().then((tabId) => readElementValue(tabId, selector)).then((result) => {
+  void getEditorTabId().then((tabId) => readElementValue(tabId, selector, fallback)).then((result) => {
     if (requestId !== valueRequestId) return;
     tooltip.textContent = result.found
       ? (result.value || '（当前为空）')
@@ -592,6 +602,8 @@ function confirmPickedElement(): void {
   const existing = editingPageReferences.find((reference) => reference.selector === pendingPickerResult?.selector);
   const reference = existing || { name, selector: pendingPickerResult.selector };
   reference.name = name;
+  // 用本次 picker 采集的指纹（可能为空）刷新降级信息。
+  if (pendingPickerResult.fallback) reference.fallback = pendingPickerResult.fallback;
   if (!existing) editingPageReferences.push(reference);
   promptEditor().querySelectorAll<HTMLElement>('.prompt-tag').forEach((tag) => {
     if (tag.dataset.selector === reference.selector) {

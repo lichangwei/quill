@@ -28,9 +28,22 @@ export interface StoredAction {
   pageReferences?: PageElementReference[];
 }
 
+/**
+ * 元素指纹，用于主 selector 失效时的降级匹配。
+ * 所有字段可选，旧数据无此字段时降级逻辑自动跳过。
+ */
+export interface ElementFingerprint {
+  tagName?: string;
+  /** 稳定语义属性快照：data-testid / aria-label / name / role / type 等 */
+  attributes?: Record<string, string>;
+  /** 文本片段，截断以控制存储体积 */
+  text?: string;
+}
+
 export interface PageElementReference {
   name: string;
   selector: string;
+  fallback?: ElementFingerprint;
 }
 
 export interface ElementPickerResult extends PageElementReference {

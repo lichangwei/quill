@@ -1,3 +1,4 @@
+import { finder } from '@medv/finder';
 import * as Types from '../types';
 
 type EditorState = Types.EditorState;
@@ -29,12 +30,31 @@ function isStoredAction(value: unknown): value is StoredAction {
     && typeof action.prompt === 'string';
 }
 
+function normalizeFingerprint(value: unknown): Types.ElementFingerprint | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  const fingerprint: Types.ElementFingerprint = {};
+  if (typeof source.tagName === 'string') fingerprint.tagName = source.tagName;
+  if (typeof source.text === 'string') fingerprint.text = source.text;
+  if (source.attributes && typeof source.attributes === 'object') {
+    const attributes: Record<string, string> = {};
+    for (const [name, attrValue] of Object.entries(source.attributes as Record<string, unknown>)) {
+      if (typeof attrValue === 'string') attributes[name] = attrValue;
+    }
+    if (Object.keys(attributes).length) fingerprint.attributes = attributes;
+  }
+  return fingerprint.tagName || fingerprint.text || fingerprint.attributes ? fingerprint : undefined;
+}
+
 function normalizePageReferences(value: unknown): PageElementReference[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((item): item is PageElementReference => Boolean(item) && typeof item === 'object'
     && typeof (item as Partial<PageElementReference>).name === 'string'
     && typeof (item as Partial<PageElementReference>).selector === 'string')
-    .map((item) => ({ name: item.name, selector: item.selector }));
+    .map((item) => {
+      const fallback = normalizeFingerprint((item as PageElementReference).fallback);
+      return { name: item.name, selector: item.selector, ...(fallback ? { fallback } : {}) };
+    });
 }
 
 function normalizeStoredAction(action: StoredAction): StoredAction {
@@ -324,11 +344,47 @@ function pathSegment(el: Element): string {
   return `${tag}:nth-of-type(${siblings.indexOf(el) + 1})`;
 }
 
+// 编译生成、不稳定的 id：随机 hash、框架自增 id（ember/react/radix/mui/:r..）、纯数字开头。
+const UNSTABLE_ID = /^\d|[0-9a-f]{6,}|^(ember|react|radix|mui-|:r|headlessui|aria-|el-id-|__)/i;
+// 编译生成的 class：CSS-in-JS（css-/sc-/jsx-/emotion）、含 hash、以及超长串。
+const UNSTABLE_CLASS = /^(css-|sc-|jsx-|emotion-|_)|[0-9a-f]{5,}/i;
+// 优先信任的语义属性，稳定性远高于 class。
+const STABLE_ATTR = /^(data-testid|data-test|data-qa|data-cy|data-id|name|role|type|aria-label|placeholder)$/;
+
+/**
+ * 用 @medv/finder 生成尽量稳定、唯一的 CSS selector。
+ * 过滤掉易变的 class/id，优先语义属性。失败或结果不唯一时返回 null，交由调用方回退。
+ */
+function finderSelector(el: Element, doc: Document): string | null {
+  const root = el.getRootNode();
+  // shadow DOM 内的元素以其 ShadowRoot 为查询根，生成相对 selector（下游按 >>> 分段查询）。
+  const scope: Document | ShadowRoot = root instanceof ShadowRoot ? root : doc;
+  const rootElement = scope instanceof ShadowRoot ? scope : scope.documentElement;
+  if (!rootElement) return null;
+  try {
+    const selector = finder(el, {
+      root: rootElement as unknown as Element,
+      idName: (name) => !UNSTABLE_ID.test(name),
+      className: (name) => !UNSTABLE_CLASS.test(name) && name.length < 30,
+      tagName: () => true,
+      attr: (name) => STABLE_ATTR.test(name),
+      timeoutMs: 500,
+    });
+    // finder 保证在 root 内唯一，仍在同一 scope 内复核，防止极端情况漏判。
+    return selector && scope.querySelectorAll(selector).length === 1 ? selector : null;
+  } catch {
+    return null;
+  }
+}
+
 export function generateElementTarget(el: Element, doc: Document = document): ElementTarget {
   if (el.id) {
     const idTarget: ElementTarget = { kind: 'id', value: el.id };
-    if (countTargetMatches(idTarget, doc) === 1) return idTarget;
+    if (!UNSTABLE_ID.test(el.id) && countTargetMatches(idTarget, doc) === 1) return idTarget;
   }
+
+  const generated = finderSelector(el, doc);
+  if (generated) return { kind: 'selector', value: generated };
 
   for (const selector of stableSelectorCandidates(el)) {
     if (uniqueSelector(selector, doc)) {
