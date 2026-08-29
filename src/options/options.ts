@@ -16,6 +16,7 @@ import {
 import { POLISH_ID, deleteAction, getActionGroups } from '../actions/storage';
 import * as Types from '../types';
 import './options.css';
+import { getDisableRules, setDisableRule } from '../settings/disable-rules';
 
 const content = document.getElementById('options-content') as HTMLElement;
 const modelDialog = document.getElementById('model-dialog') as HTMLDialogElement;
@@ -33,7 +34,19 @@ const confirmAction = document.getElementById('confirm-action') as HTMLButtonEle
 let modelState: Types.ModelConfigState = { models: [], defaultModelId: null, activeModelId: null };
 let editingModelId: string | null = null;
 let confirmHandler: (() => Promise<void>) | null = null;
-let activeSection: 'model' | 'prompt' | 'system-prompt' = 'model';
+let activeSection: 'model' | 'prompt' | 'system-prompt' | 'disabled' = 'model';
+
+function sectionFromHash(): typeof activeSection {
+  const hash = window.location.hash.replace(/^#/, '');
+  return hash === 'prompt' || hash === 'system-prompt' || hash === 'disabled' ? hash : 'model';
+}
+
+function activateSection(section: typeof activeSection, updateHash = true): void {
+  activeSection = section;
+  if (updateHash) history.replaceState(null, '', `#${section}`);
+  document.querySelectorAll<HTMLButtonElement>('.options-nav-item').forEach((nav) => nav.classList.toggle('is-active', nav.dataset.section === section));
+  renderActiveSection();
+}
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -288,9 +301,41 @@ function renderSystemPrompt(): void {
   });
 }
 
+function renderDisabled(): void {
+  const section = element('section', 'settings-section');
+  section.append(sectionHeading('禁用页面或网站', '管理已禁止注入插件脚本的页面和网站。', element('span')));
+  void getDisableRules().then((rules) => {
+    const entries = [...rules.pages.map((url) => ({ url, scope: 'page' as const })), ...rules.sites.map((url) => ({ url, scope: 'site' as const }))];
+    if (!entries.length) section.append(element('p', 'empty-state', '暂无禁用页面或网站'));
+    else {
+      const table = document.createElement('table'); table.className = 'prompt-table disabled-url-table';
+      const head = document.createElement('tr'); ['网页或网站地址', '操作'].forEach((v) => head.append(element('th', undefined, v)));
+      const tbody = document.createElement('tbody');
+      entries.forEach(({ url, scope }) => {
+        const row = document.createElement('tr');
+        const urlCell = element('td', 'disabled-url-cell');
+        const link = element('a', 'disabled-url-link', url) as HTMLAnchorElement;
+        link.href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.title = `打开 ${url}`;
+        urlCell.append(link);
+        row.append(urlCell);
+        const cell = element('td', 'prompt-table-actions');
+        cell.append(button('删除', 'text-action-button danger-text', () => { void setDisableRule(url, scope, false).then(() => renderDisabled()); }, `删除后重新启用${scope === 'page' ? '该页面' : '该网站'}`));
+        row.append(cell); tbody.append(row);
+      });
+      table.append(head, tbody); const wrapper = element('div', 'table-scroll'); wrapper.append(table); section.append(wrapper);
+    }
+    if (activeSection === 'disabled') content.replaceChildren(section);
+  });
+  content.replaceChildren(section);
+}
+
 function renderActiveSection(): void {
   if (activeSection === 'prompt') renderPagePrompts();
   else if (activeSection === 'system-prompt') renderSystemPrompt();
+  else if (activeSection === 'disabled') renderDisabled();
   else renderModels();
 }
 
@@ -302,11 +347,11 @@ async function reload(): Promise<void> {
 document.querySelectorAll<HTMLButtonElement>('.options-nav-item').forEach((item) => {
   item.addEventListener('click', () => {
     const section = item.dataset.section;
-    activeSection = section === 'prompt' || section === 'system-prompt' ? section : 'model';
-    document.querySelectorAll('.options-nav-item').forEach((nav) => nav.classList.toggle('is-active', nav === item));
-    renderActiveSection();
+    activateSection(section === 'prompt' || section === 'system-prompt' || section === 'disabled' ? section : 'model');
   });
 });
+
+window.addEventListener('hashchange', () => activateSection(sectionFromHash(), false));
 
 document.querySelectorAll<HTMLButtonElement>('.dialog-close, .dialog-cancel').forEach((item) => {
   item.addEventListener('click', () => (item.closest('dialog') as HTMLDialogElement).close());
@@ -346,6 +391,8 @@ modelTest.addEventListener('click', () => {
     modelTest.textContent = '测试连接';
   });
 });
+
+activateSection(sectionFromHash(), false);
 
 confirmAction.addEventListener('click', () => {
   if (!confirmHandler) return;

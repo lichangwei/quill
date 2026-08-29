@@ -3,9 +3,12 @@ import { isContentEditableTarget, type EditableTarget } from './filler';
 import { generateElementTarget, targetToSelector } from '../actions/storage';
 import { readSelectedElement } from '../page-context/reader';
 import { captureFingerprint } from '../page-context/fingerprint';
+import { createDomScanScheduler } from './dom-scan-scheduler';
 import type { ElementPickerResult } from '../types';
+import { getDisableState } from '../settings/disable-rules';
 
 const BUTTON_ATTR = 'data-quill-btn';
+const PANEL_ID = 'quill-panel';
 const panel = new QuillPanel();
 
 type TargetInput = EditableTarget;
@@ -112,25 +115,31 @@ function scanInputs(root: Document | Element = document) {
   });
 }
 
-// 初始扫描
-scanInputs();
+// 豆包等 SPA 会在短时间内产生大量 DOM 变更。将同一帧内的扫描合并，
+// 避免 MutationObserver 为每个新增节点重复遍历子树。
+const scheduleScan = createDomScanScheduler(scanInputs);
 
-// 监听 DOM 变化（SPA 路由切换、动态渲染）
-const observer = new MutationObserver((mutations) => {
+async function start(): Promise<void> {
+  const state = await getDisableState(location.href);
+  if (state.page || state.site) return;
+  scanInputs();
+  const observer = new MutationObserver((mutations) => {
   for (const mutation of mutations) {
     for (const node of mutation.addedNodes) {
       if (node instanceof Element) {
+        if (node.id === PANEL_ID || node.hasAttribute(BUTTON_ATTR) || node.closest(`#${PANEL_ID}`)) continue;
         if (isValidInput(node)) {
           attachToInput(node);
         } else {
-          scanInputs(node);
+          scheduleScan(node);
         }
       }
     }
   }
-});
-
-observer.observe(document.body, { childList: true, subtree: true });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+void start();
 
 let cancelActivePicker: (() => void) | null = null;
 
