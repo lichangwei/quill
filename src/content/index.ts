@@ -142,6 +142,7 @@ async function start(): Promise<void> {
 void start();
 
 let cancelActivePicker: (() => void) | null = null;
+let confirmActivePicker: (() => void) | null = null;
 
 function pickerElementName(element: Element): string {
   const ariaLabel = element.getAttribute('aria-label')?.trim();
@@ -259,6 +260,7 @@ function startElementPicker(): Promise<ElementPickerResult> {
       tooltip.remove();
       pickerStyle.remove();
       if (cancelActivePicker === cancel) cancelActivePicker = null;
+      if (confirmActivePicker) confirmActivePicker = null;
     };
     const cancel = () => {
       if (settled) return;
@@ -284,10 +286,10 @@ function startElementPicker(): Promise<ElementPickerResult> {
       tooltip.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - tooltip.offsetWidth - 8))}px`;
       tooltip.style.top = `${rect.top > 34 ? rect.top - 30 : Math.min(innerHeight - 30, rect.bottom + 4)}px`;
     };
-    const onClick = (event: MouseEvent) => {
+    const confirmHovered = (event?: Event) => {
       if (!hovered) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
+      event?.preventDefault();
+      event?.stopImmediatePropagation();
       const selector = pageSelectorFor(hovered);
       const fallback = captureFingerprint(hovered);
       const result: ElementPickerResult = {
@@ -300,14 +302,21 @@ function startElementPicker(): Promise<ElementPickerResult> {
       cleanup();
       resolve(result);
     };
+    const onClick = (event: MouseEvent) => confirmHovered(event);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         cancel();
+      } else if (event.key === 'Enter') {
+        confirmHovered(event);
+      } else if (event.key === ' ') {
+        event.preventDefault();
+        confirmHovered(event);
       }
     };
 
     cancelActivePicker = cancel;
+    confirmActivePicker = () => confirmHovered();
     document.addEventListener('mousemove', onMouseMove, true);
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKeyDown, true);
@@ -315,6 +324,18 @@ function startElementPicker(): Promise<ElementPickerResult> {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'CONFIRM_ELEMENT_PICKER') {
+    const active = !!confirmActivePicker;
+    confirmActivePicker?.();
+    sendResponse({ ok: active });
+    return;
+  }
+  if (message.type === 'CANCEL_ELEMENT_PICKER') {
+    const active = !!cancelActivePicker;
+    cancelActivePicker?.();
+    sendResponse({ ok: active });
+    return;
+  }
   if (message.type === 'READ_SELECTED_ELEMENT') {
     const selector = typeof message.selector === 'string' ? message.selector : '';
     const fallback = message.fallback && typeof message.fallback === 'object' ? message.fallback : undefined;

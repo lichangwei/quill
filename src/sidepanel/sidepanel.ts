@@ -43,6 +43,16 @@ document.querySelector<HTMLButtonElement>('.settings-button')!.addEventListener(
 });
 let refreshRequestId = 0;
 
+document.addEventListener('keydown', (event) => {
+  const pickerButton = document.querySelector<HTMLButtonElement>('.pick-element');
+  if (!pickerButton?.disabled) return;
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
+  event.preventDefault();
+  void getEditorTabId().then((tabId) => {
+    chrome.tabs.sendMessage(tabId, { type: event.key === 'Escape' ? 'CANCEL_ELEMENT_PICKER' : 'CONFIRM_ELEMENT_PICKER' });
+  });
+});
+
 async function renderDisableControls(url: string): Promise<void> {
   const controls = document.querySelector<HTMLElement>('.disable-controls');
   if (!controls) return;
