@@ -327,6 +327,13 @@ function startElementPicker(): Promise<ElementPickerResult> {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'GET_PAGE_CONTEXT') {
+    const selectedText = window.getSelection()?.toString().trim() || '';
+    const clone = document.body?.cloneNode(true) as HTMLElement | undefined;
+    clone?.querySelectorAll('script,style,noscript,template,input[type="password"]')?.forEach((node) => node.remove());
+    sendResponse({ pageText: (clone?.innerText || document.body?.innerText || '').trim().slice(0, 50000), selectedText });
+    return;
+  }
   if (message.type === 'CONFIRM_ELEMENT_PICKER') {
     const active = !!confirmActivePicker;
     confirmActivePicker?.();

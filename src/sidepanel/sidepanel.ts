@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { createElement, Check, createIcons, icons, Pencil, X, ChevronDown } from 'lucide';
 import { getDisableState, setDisableRule } from '../settings/disable-rules';
+import { mountPageChat } from './page-chat/PageChat';
 import {
   DEFAULT_POLISH_PROMPT,
   POLISH_ID,
@@ -24,6 +25,8 @@ import {
 
 
 const app = document.querySelector<HTMLElement>('#app')!;
+let pageChatOpen = false;
+let currentTabId: number | undefined;
 let view: 'list' | 'edit' = 'list';
 // ✦ 打开时通过 storage.session 传入的深链状态，消费一次以在 tab 事件竞态中收敛到编辑页。
 let pendingDeepLink: EditorState | null = null;
@@ -40,6 +43,10 @@ let valueRequestId = 0;
 createIcons({ icons });
 document.querySelector<HTMLButtonElement>('.settings-button')!.addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
+});
+document.querySelector<HTMLButtonElement>('.page-chat-toggle')!.addEventListener('click', () => {
+  pageChatOpen = !pageChatOpen;
+  void showListForCurrentTab();
 });
 let refreshRequestId = 0;
 
@@ -163,6 +170,8 @@ function groupDisplayName(group: StoredActionGroup): string {
 }
 
 function renderList(groups: StoredActionGroup[]): void {
+  app.classList.remove('page-chat-mode');
+  if (pageChatOpen) { if (currentTabId !== undefined) mountPageChat(app, { tabId: currentTabId, onBack: () => { pageChatOpen = false; void showListForCurrentTab(); } }); return; }
   view = 'list';
   if (groups.length === 0) {
     app.innerHTML = '<p class="empty">当前页面还没有配置动作元素。在输入框上点击 ✦ 按钮即可添加。</p>';
@@ -198,6 +207,7 @@ function renderList(groups: StoredActionGroup[]): void {
 async function showListForCurrentTab(): Promise<void> {
   const requestId = ++refreshRequestId;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  currentTabId = tab?.id;
   const groups = await getActionGroups();
   await renderDisableControls(tab?.url ?? '');
   if (requestId !== refreshRequestId) return;
