@@ -10,6 +10,9 @@ import { getDisableState } from '../settings/disable-rules';
 const BUTTON_ATTR = 'data-quill-btn';
 const PANEL_ID = 'quill-panel';
 const panel = new QuillPanel();
+// 不要在宿主页面的输入控件上写入标记属性：React/Next SSR 页面可能在
+// hydration 前被 content script 扫描，额外属性会直接造成 hydration mismatch。
+const attachedInputs = new WeakSet<TargetInput>();
 
 type TargetInput = EditableTarget;
 
@@ -75,8 +78,8 @@ function positionButton(btn: HTMLButtonElement, el: TargetInput) {
 }
 
 function attachToInput(el: TargetInput) {
-  if (el.hasAttribute(BUTTON_ATTR)) return;
-  el.setAttribute(BUTTON_ATTR, 'true');
+  if (attachedInputs.has(el)) return;
+  attachedInputs.add(el);
 
   const btn = createButton(el);
 
@@ -109,7 +112,7 @@ function attachToInput(el: TargetInput) {
 function scanInputs(root: Document | Element = document) {
   const selector = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type]), textarea, [contenteditable]:not([contenteditable="false"])';
   root.querySelectorAll<TargetInput>(selector).forEach((el) => {
-    if (!el.hasAttribute(BUTTON_ATTR)) {
+    if (!attachedInputs.has(el)) {
       attachToInput(el);
     }
   });
