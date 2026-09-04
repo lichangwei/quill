@@ -99,8 +99,15 @@ dialog::backdrop { background: rgb(23 27 24 / 45%); }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .form-stack { display: flex; flex-direction: column; gap: 14px; }
 .form-stack label { display: flex; flex-direction: column; gap: 6px; color: #4e5851; font-size: 12px; font-weight: 600; }
-.form-stack input, .form-stack textarea { width: 100%; padding: 9px 10px; border: 1px solid #dce2dd; border-radius: 6px; background: #fff; color: #292d2a; outline: none; font-weight: 400; }
-.form-stack input:focus, .form-stack textarea:focus { border-color: #2f6f4f; }
+.form-stack input, .form-stack textarea, .form-stack select { width: 100%; padding: 9px 10px; border: 1px solid #dce2dd; border-radius: 6px; background: #fff; color: #292d2a; outline: none; font-weight: 400; }
+.form-stack input:focus, .form-stack textarea:focus, .form-stack select:focus { border-color: #2f6f4f; box-shadow: 0 0 0 3px rgba(47, 111, 79, 0.12); }
+.field-with-action { display: flex; gap: 8px; align-items: center; }
+.field-with-action input { flex: 1; }
+.field-with-action .button { flex: none; white-space: nowrap; }
+.select-field { position: relative; }
+.select-field select { width: 100%; padding-right: 34px; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.select-field select:disabled { color: #9aa5a0; background: #f6f8f6; cursor: not-allowed; }
+.select-field::after { content: ""; position: absolute; top: 50%; right: 13px; width: 8px; height: 8px; margin-top: -6px; border-right: 1.5px solid #6b756f; border-bottom: 1.5px solid #6b756f; transform: rotate(45deg); pointer-events: none; }
 .form-stack textarea { resize: vertical; line-height: 1.5; }
 .char-count { align-self: flex-end; color: #9aa19b; font-size: 11px; font-weight: 400; }
 .form-actions { display: flex; justify-content: flex-end; margin-top: 4px; }

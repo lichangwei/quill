@@ -28,11 +28,18 @@ function isValidUrl(value: string): boolean {
   }
 }
 
+const MODEL_FORMATS: readonly Types.ModelFormat[] = ['openai-chat', 'openai-responses', 'anthropic'];
+
+function normalizeFormat(value: unknown): Types.ModelFormat {
+  return MODEL_FORMATS.includes(value as Types.ModelFormat) ? (value as Types.ModelFormat) : 'openai-chat';
+}
+
 export function validateModelConfig(config: Types.ModelConfig & { name?: string }): string | null {
   if (config.name !== undefined && !config.name.trim()) return '请填写模型名称';
   if (config.name !== undefined && config.name.trim().length > MODEL_NAME_MAX_LENGTH) {
     return `模型名称不能超过 ${MODEL_NAME_MAX_LENGTH} 个字符`;
   }
+  if (!MODEL_FORMATS.includes(config.format)) return '请选择接口格式';
   if (!config.baseUrl.trim()) return '请填写 Base URL';
   if (!isValidUrl(config.baseUrl.trim())) return 'Base URL 格式不正确';
   if (!config.apiKey.trim()) return '请填写 API Key';
@@ -45,6 +52,7 @@ function normalizeModel(value: unknown): Types.ModelProfile | null {
   const model: Types.ModelProfile = {
     id: typeof value.id === 'string' ? value.id : '',
     name: typeof value.name === 'string' ? value.name : '',
+    format: normalizeFormat(value.format),
     baseUrl: typeof value.baseUrl === 'string' ? value.baseUrl : '',
     apiKey: typeof value.apiKey === 'string' ? value.apiKey : '',
     modelId: typeof value.modelId === 'string' ? value.modelId : '',
@@ -103,7 +111,7 @@ async function migrateLegacyModel(): Promise<Types.ModelConfigState | null> {
   const modelId = typeof value.model === 'string' && value.model.trim() ? value.model.trim() : 'gpt-4o';
   const id = createId('model');
   const state: Types.ModelConfigState = {
-    models: [{ id, name: '模型 1', baseUrl: endpoint, apiKey: value.apiKey.trim(), modelId, enabled: true }],
+    models: [{ id, name: '模型 1', format: 'openai-chat', baseUrl: endpoint, apiKey: value.apiKey.trim(), modelId, enabled: true }],
     defaultModelId: id,
     activeModelId: id,
   };

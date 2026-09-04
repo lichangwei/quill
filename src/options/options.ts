@@ -1,4 +1,4 @@
-import { testConnection } from '../ai/service';
+import { detectFormat, testConnection } from '../ai/service';
 import {
   MODEL_NAME_MAX_LENGTH,
   MODEL_STORAGE_KEY,
@@ -22,14 +22,23 @@ const content = document.getElementById('options-content') as HTMLElement;
 const modelDialog = document.getElementById('model-dialog') as HTMLDialogElement;
 const modelForm = document.getElementById('model-form') as HTMLFormElement;
 const modelName = document.getElementById('model-name') as HTMLInputElement;
+const modelFormat = document.getElementById('model-format') as HTMLSelectElement;
 const modelBaseUrl = document.getElementById('model-base-url') as HTMLInputElement;
 const modelApiKey = document.getElementById('model-api-key') as HTMLInputElement;
-const modelId = document.getElementById('model-id') as HTMLInputElement;
+const modelId = document.getElementById('model-id') as HTMLSelectElement;
 const modelStatus = document.getElementById('model-form-status') as HTMLParagraphElement;
 const modelTest = document.getElementById('model-test') as HTMLButtonElement;
+const modelDetect = document.getElementById('model-detect') as HTMLButtonElement;
+const modelDetectStatus = document.getElementById('model-detect-status') as HTMLParagraphElement;
 const confirmDialog = document.getElementById('confirm-dialog') as HTMLDialogElement;
 const confirmDescription = document.getElementById('confirm-description') as HTMLParagraphElement;
 const confirmAction = document.getElementById('confirm-action') as HTMLButtonElement;
+
+const FORMAT_LABELS: Record<Types.ModelFormat, string> = {
+  'openai-chat': 'OpenAI Chat Completions',
+  'openai-responses': 'OpenAI Responses API',
+  anthropic: 'Anthropic Messages API',
+};
 
 let modelState: Types.ModelConfigState = { models: [], defaultModelId: null, activeModelId: null };
 let editingModelId: string | null = null;
@@ -108,21 +117,48 @@ function updateCount(input: HTMLInputElement | HTMLTextAreaElement, targetId: st
 function modelValues() {
   return {
     name: modelName.value.trim(),
+    format: modelFormat.value as Types.ModelFormat,
     baseUrl: modelBaseUrl.value.trim(),
     apiKey: modelApiKey.value.trim(),
     modelId: modelId.value.trim(),
   };
 }
 
+/**
+ * 用检测到的模型填充模型 ID 下拉框，并选中 selected（默认第一个）。
+ * models 为空时显示占位提示；selected 不在列表中时仍补入以保留已保存值。
+ */
+function setModelIdOptions(models: string[], selected?: string): void {
+  if (models.length === 0 && !selected) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = '请先自动检测或填写 API Key';
+    modelId.replaceChildren(placeholder);
+    return;
+  }
+  const ids = selected && !models.includes(selected) ? [selected, ...models] : models;
+  modelId.replaceChildren(...ids.map((id) => {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = id;
+    return option;
+  }));
+  modelId.value = selected ?? ids[0] ?? '';
+}
+
 function openModelDialog(model?: Types.ModelProfile): void {
   editingModelId = model?.id ?? null;
+  setModelIdOptions([], model?.modelId);
   (document.getElementById('model-dialog-title') as HTMLElement).textContent = model ? '编辑模型' : '新增模型';
   modelName.value = model?.name ?? '';
+  modelFormat.value = model?.format ?? 'openai-chat';
   modelBaseUrl.value = model?.baseUrl ?? '';
   modelApiKey.value = model?.apiKey ?? '';
-  modelId.value = model?.modelId ?? '';
   updateCount(modelName, 'model-name-count', MODEL_NAME_MAX_LENGTH);
   showFormStatus(modelStatus, '');
+  showFormStatus(modelDetectStatus, '');
   modelTest.disabled = false;
   modelTest.textContent = '测试连接';
   modelDialog.showModal();
@@ -149,7 +185,7 @@ function renderModels(): void {
   const section = element('section', 'settings-section');
   section.append(sectionHeading(
     '模型',
-    '配置多套 OpenAI 兼容模型。模型名称用于区分相同 Base URL 下不同的模型 ID，信息只保存在本地。',
+    '配置多套模型，支持 OpenAI Chat Completions、Responses 与 Anthropic Messages 接口格式。信息只保存在本地。',
     button('新增模型', 'button primary', () => openModelDialog()),
   ));
   if (modelState.models.length === 0) {
@@ -157,7 +193,7 @@ function renderModels(): void {
   } else {
     const list = element('div', 'settings-list');
     for (const model of modelState.models) {
-      const row = settingsListItem(model.name, `${model.modelId} · ${model.baseUrl}`);
+      const row = settingsListItem(model.name, `${FORMAT_LABELS[model.format] ?? model.format} · ${model.modelId} · ${model.baseUrl}`);
       if (model.id === modelState.defaultModelId) row.titleRow.append(badge('默认', 'success'));
       if (!model.enabled) row.titleRow.append(badge('已停用'));
       const toggle = element('label', 'switch-control');
@@ -373,6 +409,30 @@ modelForm.addEventListener('submit', (event) => {
     await reload();
     showToast('保存成功');
   }).catch((saveError: unknown) => showFormStatus(modelStatus, saveError instanceof Error ? saveError.message : String(saveError)));
+});
+
+modelDetect.addEventListener('click', () => {
+  const baseUrl = modelBaseUrl.value.trim();
+  const apiKey = modelApiKey.value.trim();
+  if (!baseUrl) return showFormStatus(modelDetectStatus, '请先填写 Base URL');
+  if (!apiKey) return showFormStatus(modelDetectStatus, '请先填写 API Key');
+  modelDetect.disabled = true;
+  modelDetect.textContent = '检测中...';
+  showFormStatus(modelDetectStatus, '');
+  void detectFormat({ baseUrl, apiKey }).then((result) => {
+    if (result.format) {
+      modelFormat.value = result.format;
+      const models = result.models ?? [];
+      setModelIdOptions(models);
+      const suffix = models.length ? `，已获取 ${models.length} 个模型` : '，未获取到模型列表，请手动选择';
+      showFormStatus(modelDetectStatus, `已识别为 ${FORMAT_LABELS[result.format]}${suffix}`, true);
+    } else {
+      showFormStatus(modelDetectStatus, result.error ?? '未能识别接口格式');
+    }
+  }).finally(() => {
+    modelDetect.disabled = false;
+    modelDetect.textContent = '自动检测';
+  });
 });
 
 modelTest.addEventListener('click', () => {

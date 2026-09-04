@@ -1,4 +1,7 @@
+export type ModelFormat = 'openai-chat' | 'openai-responses' | 'anthropic';
+
 export interface ModelConfig {
+  format: ModelFormat;
   baseUrl: string;
   apiKey: string;
   modelId: string;

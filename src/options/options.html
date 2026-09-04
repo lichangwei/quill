@@ -32,8 +32,27 @@
       <div class="dialog-body form-stack">
         <label>模型名称<input id="model-name" type="text" maxlength="30" placeholder="例如：工作 Qwen" /><span id="model-name-count" class="char-count">0/30</span></label>
         <label>Base URL<input id="model-base-url" type="url" placeholder="https://api.example.com/v1" /></label>
-        <label>API Key<input id="model-api-key" type="password" autocomplete="off" placeholder="API Key" /></label>
-        <label>模型 ID<input id="model-id" type="text" placeholder="例如：qwen-plus" /></label>
+        <label>API Key
+          <div class="field-with-action">
+            <input id="model-api-key" type="password" autocomplete="off" placeholder="API Key" />
+            <button id="model-detect" type="button" class="button secondary">自动检测</button>
+          </div>
+          <p id="model-detect-status" class="form-status" hidden></p>
+        </label>
+        <label>模型 ID
+          <div class="select-field">
+            <select id="model-id"><option value="" disabled selected>请先自动检测或填写 API Key</option></select>
+          </div>
+        </label>
+        <label>接口格式
+          <div class="select-field">
+            <select id="model-format">
+              <option value="openai-chat">OpenAI Chat Completions</option>
+              <option value="openai-responses">OpenAI Responses API</option>
+              <option value="anthropic">Anthropic Messages API</option>
+            </select>
+          </div>
+        </label>
         <p id="model-form-status" class="form-status" hidden></p>
       </div>
       <div class="dialog-footer">

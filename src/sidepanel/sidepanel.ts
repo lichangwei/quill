@@ -6,7 +6,7 @@ import type {
   StoredAction,
   StoredActionGroup,
 } from '../types';
-import { createElement, Check, createIcons, icons, Pencil, X, ChevronDown } from 'lucide';
+import { createElement, Check, createIcons, icons, Pencil, X } from 'lucide';
 import { getDisableState, setDisableRule } from '../settings/disable-rules';
 import { mountPageChat } from './page-chat/PageChat';
 import {
@@ -63,28 +63,16 @@ document.addEventListener('keydown', (event) => {
 async function renderDisableControls(url: string): Promise<void> {
   const controls = document.querySelector<HTMLElement>('.disable-controls');
   if (!controls) return;
-  const main = controls.querySelector<HTMLButtonElement>('.disable-main')!;
-  const arrow = controls.querySelector<HTMLButtonElement>('.disable-arrow')!;
-  const menu = controls.querySelector<HTMLElement>('.disable-menu')!;
-  const siteOption = controls.querySelector<HTMLButtonElement>('.disable-site-option')!;
+  const siteButton = controls.querySelector<HTMLButtonElement>('.disable-site')!;
   const supported = /^https?:\/\//i.test(url);
   const state = await getDisableState(url);
   controls.hidden = false;
-  main.disabled = !supported;
-  arrow.disabled = !supported;
-  main.title = supported ? '' : '当前页面类型不支持注入插件脚本';
-  arrow.title = '';
-  if (!supported) menu.hidden = true;
-  arrow.replaceChildren(createElement(ChevronDown, { 'aria-hidden': 'true' }));
-  siteOption.title = state.site
-    ? '启用此网站后，该域名下的页面将恢复注入嘴替插件脚本。'
-    : '禁用此网站后，该域名下的所有页面都不会注入嘴替插件脚本。';
-  main.textContent = state.page || state.site ? '在此页面启用插件' : '在此页面禁用插件';
-  siteOption.textContent = state.site ? '在此网站启用插件' : '在此网站禁用插件';
-  main.onclick = async () => { await setDisableRule(url, 'page', !state.page); await chrome.tabs.reload(); };
-  arrow.onclick = () => { menu.hidden = !menu.hidden; };
-  siteOption.onclick = async () => {
-    menu.hidden = true;
+  siteButton.disabled = !supported;
+  siteButton.title = supported
+    ? (state.site ? '启用此网站插件' : '禁用此网站插件')
+    : '当前页面类型不支持注入插件脚本';
+  siteButton.setAttribute('aria-label', siteButton.title);
+  siteButton.onclick = async () => {
     await setDisableRule(url, 'site', !state.site);
     await chrome.tabs.reload();
   };
